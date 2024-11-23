@@ -27,7 +27,7 @@ const sampleNotes = [
   },
   {
     id: 'note-2',
-    text: "Once we accept loneliness, we can get creative: we can start to send out messages in a bottle: we can sing, write poetry, produce books and blogs, activities stemming from the realisation that people around us won't ever fully get us but that others ��� separated across time and space – might just.– The history of art is the record of people who couldn't find anyone in the vicinity to talk to. We can take up the coded offer of intimacy in the words of a Roman poet who died in 10BC or the lyrics of a singer who described just our blues in a recording from Nashville in 1963.",
+    text: "Once we accept loneliness, we can get creative: we can start to send out messages in a bottle: we can sing, write poetry, produce books and blogs, activities stemming from the realisation that people around us won't ever fully get us but that others  separated across time and space – might just.– The history of art is the record of people who couldn't find anyone in the vicinity to talk to. We can take up the coded offer of intimacy in the words of a Roman poet who died in 10BC or the lyrics of a singer who described just our blues in a recording from Nashville in 1963.",
   },
   {
     id: 'note-3',
@@ -39,14 +39,23 @@ const sampleNotes = [
   },
 ];
 
+// Add these new types at the top with other type definitions
+type SuggestedNote = {
+  id: string;
+  text: string;
+  preview: string;
+};
+
 // Custom Note Node component
 function NoteNode({ data, id }: NodeProps<NodeData>) {
   const [showPlus, setShowPlus] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout>();
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestedNotes, setSuggestedNotes] = useState<SuggestedNote[]>([]);
   
   // Get setNodes from context
-  const { setNodes } = useReactFlow();
+  const { setNodes, setEdges, getNode } = useReactFlow();
 
   const handleMouseEnter = () => {
     if (timeoutRef.current) {
@@ -148,11 +157,57 @@ function NoteNode({ data, id }: NodeProps<NodeData>) {
     }
   };
 
+  // Add this function to handle node click
+  const handleNodeClick = useCallback(() => {
+    // Get 3 random notes from sampleNotes (replace this with your database query)
+    const availableNotes = sampleNotes.filter(note => note.id !== id);
+    const randomNotes = [...availableNotes]
+      .sort(() => 0.5 - Math.random())
+      .slice(0, 3)
+      .map(note => ({
+        id: note.id,
+        text: note.text,
+        preview: note.text.substring(0, 100) + '...'
+      }));
+
+    setSuggestedNotes(randomNotes);
+    setShowSuggestions(true);
+  }, [id]);
+
+  // Add function to handle suggestion selection
+  const handleSuggestionSelect = useCallback((selectedNote: SuggestedNote) => {
+    const parentNode = getNode(id);
+    if (!parentNode) return;
+
+    // Create new node
+    const newNode = {
+      id: `node-${Date.now()}`,
+      type: 'noteNode',
+      position: {
+        x: parentNode.position.x + 300,
+        y: parentNode.position.y,
+      },
+      data: { text: selectedNote.text },
+    };
+
+    // Create connection
+    const newEdge = {
+      id: `edge-${Date.now()}`,
+      source: id,
+      target: newNode.id,
+    };
+
+    setNodes((nodes) => [...nodes, newNode]);
+    setEdges((edges) => [...edges, newEdge]);
+    setShowSuggestions(false);
+  }, [id, getNode, setNodes, setEdges]);
+
   return (
     <div 
       className={styles.noteNode}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onClick={handleNodeClick}
     >
       <Handle
         type="target"
@@ -195,6 +250,37 @@ function NoteNode({ data, id }: NodeProps<NodeData>) {
           </button>
         )}
       </div>
+      
+      {showSuggestions && (
+        <div className={styles.suggestionsPanel}>
+          <div className={styles.suggestionsHeader}>
+            Related Notes
+            <button 
+              className={styles.closeButton}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowSuggestions(false);
+              }}
+            >
+              ×
+            </button>
+          </div>
+          <div className={styles.suggestionsList}>
+            {suggestedNotes.map((note) => (
+              <div
+                key={note.id}
+                className={styles.suggestionItem}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSuggestionSelect(note);
+                }}
+              >
+                {note.preview}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
