@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, ChangeEvent } from 'react';
 import ReactFlow, {
   Node,
   Edge,
@@ -14,6 +14,7 @@ import ReactFlow, {
   OnConnectEnd,
   Handle,
   Position,
+  useReactFlow,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import styles from './page.module.css';
@@ -26,7 +27,7 @@ const sampleNotes = [
   },
   {
     id: 'note-2',
-    text: "Once we accept loneliness, we can get creative: we can start to send out messages in a bottle: we can sing, write poetry, produce books and blogs, activities stemming from the realisation that people around us won't ever fully get us but that others – separated across time and space – might just.– The history of art is the record of people who couldn't find anyone in the vicinity to talk to. We can take up the coded offer of intimacy in the words of a Roman poet who died in 10BC or the lyrics of a singer who described just our blues in a recording from Nashville in 1963.",
+    text: "Once we accept loneliness, we can get creative: we can start to send out messages in a bottle: we can sing, write poetry, produce books and blogs, activities stemming from the realisation that people around us won't ever fully get us but that others ��� separated across time and space – might just.– The history of art is the record of people who couldn't find anyone in the vicinity to talk to. We can take up the coded offer of intimacy in the words of a Roman poet who died in 10BC or the lyrics of a singer who described just our blues in a recording from Nashville in 1963.",
   },
   {
     id: 'note-3',
@@ -39,9 +40,120 @@ const sampleNotes = [
 ];
 
 // Custom Note Node component
-function NoteNode({ data }: NodeProps<NodeData>) {
+function NoteNode({ data, id }: NodeProps<NodeData>) {
+  const [showPlus, setShowPlus] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const timeoutRef = useRef<NodeJS.Timeout>();
+  
+  // Get setNodes from context
+  const { setNodes } = useReactFlow();
+
+  const handleMouseEnter = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    setShowPlus(true);
+  };
+
+  const handleMouseLeave = (e: React.MouseEvent) => {
+    // Check if we're moving towards the plus button
+    const buttonElement = e.currentTarget.querySelector(`.${styles.plusButton}`);
+    if (buttonElement) {
+      const buttonRect = buttonElement.getBoundingClientRect();
+      const mouseX = e.clientX;
+      const mouseY = e.clientY;
+      
+      // If moving towards the button, don't hide immediately
+      if (mouseX > buttonRect.left - 20 && mouseX < buttonRect.right + 20 &&
+          mouseY > buttonRect.top - 20 && mouseY < buttonRect.bottom + 20) {
+        return;
+      }
+    }
+
+    // Add a small delay before hiding
+    timeoutRef.current = setTimeout(() => {
+      setShowPlus(false);
+    }, 300);
+  };
+
+  const generateImageNode = async () => {
+    if (!data.text) return;
+    setIsLoading(true);
+    
+    try {
+      // First, get the search query from OpenAI
+      const response = await fetch('/api/generate-query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text: data.text }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate search query');
+      }
+
+      const { searchQuery, error: queryError } = await response.json();
+      
+      if (queryError) {
+        throw new Error(queryError);
+      }
+      
+      // Then, search for an image using the query
+      const imageResponse = await fetch('/api/search-image', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query: searchQuery }),
+      });
+      
+      if (!imageResponse.ok) {
+        throw new Error('Failed to fetch image');
+      }
+
+      const { imageUrl, credit, error: imageError } = await imageResponse.json();
+      
+      if (imageError) {
+        throw new Error(imageError);
+      }
+      
+      // Create a new node with the image
+      setNodes((nodes) => {
+        const parentNode = nodes.find((n) => n.id === id);
+        if (!parentNode) return nodes;
+        
+        const newNode = {
+          id: `node-${Date.now()}`,
+          type: 'noteNode',
+          position: {
+            x: parentNode.position.x + 300,
+            y: parentNode.position.y,
+          },
+          data: { 
+            image: imageUrl,
+            title: 'Generated Image',
+            credit
+          },
+        };
+        
+        return [...nodes, newNode];
+      });
+    } catch (error) {
+      console.error('Error generating image node:', error);
+      // You might want to add some UI feedback here
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <div className={styles.noteNode}>
+    <div 
+      className={styles.noteNode}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
       <Handle
         type="target"
         position={Position.Top}
@@ -53,8 +165,35 @@ function NoteNode({ data }: NodeProps<NodeData>) {
         className={styles.handle}
       />
       <div className={styles.noteContent}>
+        {data.title && <div className={styles.noteTitle}>{data.title}</div>}
         {data.text && <div>{data.text}</div>}
-        {data.image && <img src={data.image} alt="Pasted content" className={styles.nodeImage} />}
+        {data.image && (
+          <div className={styles.imageContainer}>
+            <img src={data.image} alt="Generated content" className={styles.nodeImage} />
+            {data.credit && (
+              <a 
+                href={data.credit.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.imageCredit}
+              >
+                Photo by {data.credit.name}
+              </a>
+            )}
+          </div>
+        )}
+        {showPlus && data.text && (
+          <button 
+            className={styles.plusButton}
+            onClick={(e) => {
+              e.stopPropagation();
+              generateImageNode();
+            }}
+            disabled={isLoading}
+          >
+            {isLoading ? '...' : '+'}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -68,12 +207,20 @@ const nodeTypes = {
 type NodeData = {
   text?: string;
   image?: string;
+  title?: string;
+  id?: string;
+  credit?: {
+    name: string;
+    username: string;
+    link: string;
+  };
 };
 
 export default function Home() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [showSidebar, setShowSidebar] = useState(true);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Handle right-click to create new node
   const onPaneContextMenu = useCallback(
@@ -187,6 +334,59 @@ export default function Home() {
     };
   }, [onPaste]);
 
+  const handleFileUpload = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files) return;
+
+    // Calculate a grid layout
+    const GRID_SPACING = 300;
+    const NODES_PER_ROW = 3;
+
+    // Create an array to store all promises
+    const fileReadPromises = Array.from(files).map((file) => {
+      return new Promise<Node<NodeData>>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const content = e.target?.result as string;
+          resolve({
+            id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            type: 'noteNode',
+            data: { 
+              text: content,
+              title: file.name 
+            },
+            // We'll set the position after we have all nodes
+            position: { x: 0, y: 0 },
+          });
+        };
+        reader.readAsText(file);
+      });
+    });
+
+    // Wait for all files to be read
+    Promise.all(fileReadPromises).then((newNodes) => {
+      // Position all nodes in a grid
+      const positionedNodes = newNodes.map((node, index) => {
+        const row = Math.floor(index / NODES_PER_ROW);
+        const col = index % NODES_PER_ROW;
+        
+        return {
+          ...node,
+          position: {
+            x: 100 + (col * GRID_SPACING),
+            y: 100 + (row * GRID_SPACING),
+          }
+        };
+      });
+
+      setNodes((nds) => [...nds, ...positionedNodes]);
+    });
+  }, []);
+
+  const handleLabelClick = () => {
+    fileInputRef.current?.click();
+  };
+
   return (
     <div className={styles.page}>
       <div className={styles.sidebar} style={{ display: showSidebar ? 'block' : 'none' }}>
@@ -196,6 +396,22 @@ export default function Home() {
         >
           {showSidebar ? '←' : '→'}
         </button>
+        <div className={styles.fileUpload}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".md"
+            multiple
+            onChange={handleFileUpload}
+            className={styles.fileInput}
+          />
+          <label 
+            className={styles.fileLabel}
+            onClick={handleLabelClick}
+          >
+            Import Markdown Files
+          </label>
+        </div>
         <div className={styles.notesList}>
           {sampleNotes.map((note) => (
             <div 
