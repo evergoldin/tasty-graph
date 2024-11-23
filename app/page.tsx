@@ -67,6 +67,12 @@ type NodeData = {
   };
 };
 
+// First, add this type near the top with other type definitions
+type SearchQuery = {
+  id: string;
+  query: string;
+};
+
 // Custom Note Node component
 function NoteNode({ data, id }: NodeProps<NodeData>) {
   const [showPlus, setShowPlus] = useState(false);
@@ -74,6 +80,8 @@ function NoteNode({ data, id }: NodeProps<NodeData>) {
   const timeoutRef = useRef<NodeJS.Timeout>();
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestedNotes, setSuggestedNotes] = useState<SuggestedNote[]>([]);
+  const [searchQueries, setSearchQueries] = useState<SearchQuery[]>([]);
+  const [showQueries, setShowQueries] = useState(false);
   
   // Get setNodes from context
   const { setNodes, setEdges, getNode } = useReactFlow();
@@ -106,12 +114,12 @@ function NoteNode({ data, id }: NodeProps<NodeData>) {
     }, 300);
   };
 
-  const generateImageNode = async () => {
+  const generateSearchQueries = async () => {
     if (!data.text) return;
     setIsLoading(true);
     
     try {
-      // First, get the search query from OpenAI
+      // Get multiple search queries from OpenAI
       const response = await fetch('/api/generate-query', {
         method: 'POST',
         headers: {
@@ -121,22 +129,39 @@ function NoteNode({ data, id }: NodeProps<NodeData>) {
       });
       
       if (!response.ok) {
-        throw new Error('Failed to generate search query');
+        throw new Error('Failed to generate search queries');
       }
 
-      const { searchQuery, error: queryError } = await response.json();
+      const { searchQueries, error: queryError } = await response.json();
       
       if (queryError) {
         throw new Error(queryError);
       }
+
+      // Format the queries
+      const formattedQueries = searchQueries.map((query: string, index: number) => ({
+        id: `query-${index}`,
+        query
+      }));
       
-      // Then, search for an image using the query
+      setSearchQueries(formattedQueries);
+      setShowQueries(true);
+    } catch (error) {
+      console.error('Error generating search queries:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const generateImageFromQuery = async (query: string) => {
+    setIsLoading(true);
+    try {
       const imageResponse = await fetch('/api/search-image', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ query: searchQuery }),
+        body: JSON.stringify({ query }),
       });
       
       if (!imageResponse.ok) {
@@ -171,10 +196,10 @@ function NoteNode({ data, id }: NodeProps<NodeData>) {
         return [...nodes, newNode];
       });
     } catch (error) {
-      console.error('Error generating image node:', error);
-      // You might want to add some UI feedback here
+      console.error('Error generating image:', error);
     } finally {
       setIsLoading(false);
+      setShowQueries(false);
     }
   };
 
@@ -200,13 +225,13 @@ function NoteNode({ data, id }: NodeProps<NodeData>) {
     const parentNode = getNode(id);
     if (!parentNode) return;
 
-    // Create new node
+    // Create new node with position up and to the left
     const newNode = {
       id: `node-${Date.now()}`,
       type: 'noteNode',
       position: {
-        x: parentNode.position.x + 300,
-        y: parentNode.position.y,
+        x: parentNode.position.x - 300,
+        y: parentNode.position.y - 100,
       },
       data: { text: selectedNote.text },
     };
@@ -233,12 +258,14 @@ function NoteNode({ data, id }: NodeProps<NodeData>) {
       <Handle
         type="target"
         position={Position.Top}
-        className={styles.handle}
+        className={`${styles.handle} ${styles.handleTop}`}
+        style={{ width: '15px', height: '15px' }}
       />
       <Handle
         type="source"
         position={Position.Bottom}
-        className={styles.handle}
+        className={`${styles.handle} ${styles.handleBottom}`}
+        style={{ width: '15px', height: '15px' }}
       />
       <div className={styles.noteContent}>
         {data.isTitle ? (
@@ -266,7 +293,7 @@ function NoteNode({ data, id }: NodeProps<NodeData>) {
                 className={styles.plusButton}
                 onClick={(e) => {
                   e.stopPropagation();
-                  generateImageNode();
+                  generateSearchQueries();
                 }}
                 disabled={isLoading}
               >
@@ -276,6 +303,37 @@ function NoteNode({ data, id }: NodeProps<NodeData>) {
           </>
         )}
       </div>
+      
+      {showQueries && (
+        <div className={styles.queriesPanel}>
+          <div className={styles.queriesHeader}>
+            Select an Image Query
+            <button 
+              className={styles.closeButton}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowQueries(false);
+              }}
+            >
+              ×
+            </button>
+          </div>
+          <div className={styles.queriesList}>
+            {searchQueries.map((query) => (
+              <button
+                key={query.id}
+                className={styles.queryButton}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  generateImageFromQuery(query.query);
+                }}
+              >
+                {query.query}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       
       {showSuggestions && (
         <div className={styles.suggestionsPanel}>

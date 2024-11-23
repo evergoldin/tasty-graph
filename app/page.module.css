@@ -32,7 +32,7 @@
 }
 
 .noteNode {
-  padding: 20px;
+  padding: 15px 20px;
   border-radius: 8px;
   background: #2a2a2a;
   border: 1px solid #404040;
@@ -40,6 +40,7 @@
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
   color: #fff;
   position: relative;
+  margin: 8px 0;
 }
 
 .noteContent {
@@ -102,17 +103,27 @@
 }
 
 .handle {
-  width: 8px;
-  height: 8px;
-  background: #666;
-  border: 2px solid #fff;
-  border-radius: 50%;
-  transition: all 0.2s;
+  width: 15px !important;
+  height: 15px !important;
+  background: #64748b !important;
+  border: 2px solid white !important;
+  border-radius: 50% !important;
+  transition: all 0.2s ease !important;
 }
 
 .handle:hover {
-  background: #888;
-  transform: scale(1.2);
+  width: 20px !important;
+  height: 20px !important;
+  background: #3b82f6 !important;
+  cursor: crosshair;
+}
+
+.handleTop {
+  top: -8px !important;
+}
+
+.handleBottom {
+  bottom: -8px !important;
 }
 
 /* Style the connection lines */
@@ -230,8 +241,8 @@
 
 .suggestionsPanel {
   position: absolute;
-  right: -320px;
-  top: 0;
+  left: -320px;
+  top: -100px;
   width: 300px;
   background: #2a2a2a;
   border: 1px solid #404040;
@@ -299,4 +310,58 @@
   font-size: 1.1em;
   color: #fff;
   text-align: center;
+}
+
+.queriesPanel {
+  position: absolute;
+  right: -320px;
+  top: 0;
+  width: 300px;
+  background: #2a2a2a;
+  border: 1px solid #404040;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  z-index: 10;
+  color: #fff;
+}
+
+.queriesHeader {
+  padding: 12px;
+  border-bottom: 1px solid #404040;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 500;
+  color: #fff;
+}
+
+.queriesList {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.queryButton {
+  padding: 12px 16px;
+  background: #333333;
+  border: 1px solid #404040;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.queryButton:hover {
+  background: #404040;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.queryButton:active {
+  transform: translateY(0);
+  box-shadow: none;
 }

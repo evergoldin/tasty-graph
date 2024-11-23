@@ -10,36 +10,28 @@ export async function POST(request: Request) {
     const { text } = await request.json();
     
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
       messages: [
         {
           role: "system",
-          content: "You are an expert at creating Unsplash-style image search queries that capture concepts through visual metaphors and direct representations. Focus on practical, searchable terms that would yield high-quality stock photography results while maintaining conceptual relevance."
+          content: "You are a helpful assistant that generates image search queries based on text. Generate 3 different search queries that would find relevant images."
         },
         {
           role: "user",
-          content: `Create a practical image search query for Unsplash based on this text: "${text}".
-Consider these approaches:
-1. Direct visual representation if the concept is tangible
-2. Common metaphors that photographers would capture
-3. Related objects or scenes that evoke the concept
-4. Natural or architectural elements that reflect the theme
-5. Minimal, clean compositions that photographers favor
-
-Make the query realistic and searchable on Unsplash (2-5 words).
-Use popular photography subjects and styles.
-Prioritize connection to the original concept.`
+          content: `Generate 3 different image search queries for this text: "${text}"`
         }
       ],
-      max_tokens: 50,
-      temperature: 0.7,
+      model: "gpt-3.5-turbo",
     });
 
-    const searchQuery = completion.choices[0].message.content?.trim() || '';
-    
-    return NextResponse.json({ searchQuery });
+    const queries = completion.choices[0].message.content
+      ?.split('\n')
+      .filter(q => q.trim())
+      .map(q => q.replace(/^\d+\.\s*/, '').trim())
+      .slice(0, 3);
+
+    return NextResponse.json({ searchQueries: queries });
   } catch (error) {
     console.error('Error generating query:', error);
-    return NextResponse.json({ error: 'Error generating query' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to generate search queries' }, { status: 500 });
   }
 } 
