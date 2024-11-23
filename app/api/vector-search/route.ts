@@ -5,10 +5,10 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Cache for storing embeddings
-let embeddingsCache: { [key: string]: number[] } = {};
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1 second
 
-async function getEmbedding(text: string) {
+async function getEmbeddingWithRetry(text: string, retries = 0): Promise<number[]> {
   try {
     const response = await openai.embeddings.create({
       model: "text-embedding-ada-002",
@@ -16,65 +16,91 @@ async function getEmbedding(text: string) {
     });
     return response.data[0].embedding;
   } catch (error) {
-    console.error('Error getting embedding:', error);
-    throw error;
+    if (retries < MAX_RETRIES) {
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+      return getEmbeddingWithRetry(text, retries + 1);
+    }
+    throw new Error('Failed to get embedding after multiple retries');
   }
 }
 
-function cosineSimilarity(a: number[], b: number[]): number {
-  const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0);
-  const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
-  const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
-  return dotProduct / (magnitudeA * magnitudeB);
+interface NoteWithEmbedding {
+  id: string;
+  text: string;
+  embedding?: number[];
 }
 
 export async function POST(req: Request) {
   try {
-    const { text, notes } = await req.json();
+    const { text, notes, useStoredEmbeddings } = await req.json();
 
-    // First, filter out any notes that exactly match the input text
-    const filteredNotes = notes.filter((note: { text: string; }) => 
-      note.text.trim() !== text.trim()
-    );
+    if (!text || !notes) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
 
-    // Get embedding for the clicked text
-    const targetEmbedding = await getEmbedding(text);
+    let queryEmbedding;
+    try {
+      queryEmbedding = await getEmbeddingWithRetry(text);
+    } catch (error) {
+      console.error('Error getting embedding:', error);
+      return NextResponse.json(
+        { error: 'Failed to process query. Please try again later.' },
+        { status: 503 }
+      );
+    }
 
-    // Get embeddings for filtered notes
-    const noteEmbeddings = await Promise.all(
-      filteredNotes.map(async (note: { id: string; text: string }) => {
-        if (!embeddingsCache[note.id]) {
-          embeddingsCache[note.id] = await getEmbedding(note.text);
+    let processedNotes: NoteWithEmbedding[];
+    
+    if (useStoredEmbeddings) {
+      // Use the pre-generated embeddings directly
+      processedNotes = notes.filter((note: NoteWithEmbedding) => note.embedding !== undefined);
+    } else {
+      // Generate embeddings on the fly
+      const noteEmbeddingPromises = notes.map(async (note: NoteWithEmbedding) => {
+        try {
+          const embedding = await getEmbeddingWithRetry(note.text);
+          return {
+            ...note,
+            embedding
+          };
+        } catch (error) {
+          console.error(`Error processing note ${note.id}:`, error);
+          return null;
         }
-        return {
-          ...note,
-          embedding: embeddingsCache[note.id],
-        };
-      })
-    );
+      });
 
-    // Calculate similarities and sort
-    const similarNotes = noteEmbeddings
-      .map(note => {
-        const similarity = cosineSimilarity(targetEmbedding, note.embedding);
+      processedNotes = (await Promise.all(noteEmbeddingPromises))
+        .filter((note): note is NoteWithEmbedding => note !== null);
+    }
+
+    // Calculate similarities
+    const similarNotes = processedNotes
+      .map((note) => {
+        const similarity = cosineSimilarity(queryEmbedding, note.embedding!);
         return {
-          ...note,
-          similarity: similarity,
+          id: note.id,
+          text: note.text,
+          preview: note.text.substring(0, 100) + '...',
+          similarity
         };
       })
-      .filter(note => note.similarity < 0.9999) // Filter out near-perfect matches
       .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, 3) // Get top 3 similar notes
-      .map(({ id, text, similarity }) => ({
-        id,
-        text,
-        preview: text.substring(0, 100) + '...',
-        similarity,
-      }));
+      .slice(0, 3);
 
     return NextResponse.json({ similarNotes });
   } catch (error) {
     console.error('Error in vector search:', error);
-    return NextResponse.json({ error: 'Failed to process vector search' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'An unexpected error occurred' },
+      { status: 500 }
+    );
   }
+}
+
+function cosineSimilarity(vecA: number[], vecB: number[]): number {
+  const dotProduct = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0);
+  const magnitudeA = Math.sqrt(vecA.reduce((sum, a) => sum + a * a, 0));
+  const magnitudeB = Math.sqrt(vecB.reduce((sum, b) => sum + b * b, 0));
+  return dotProduct / (magnitudeA * magnitudeB);
 } 

@@ -52,6 +52,9 @@ type ImportedNote = {
   id: string;
   title: string;
   content: string;
+  author?: string;
+  location?: string;
+  date?: string;
 };
 
 // First, update the NodeData type to better handle titles
@@ -75,6 +78,13 @@ type SearchQuery = {
   id: string;
   query: string;
 };
+
+// Add these types to your existing types
+interface NoteWithEmbedding {
+  id: string;
+  text: string;
+  embedding?: number[];
+}
 
 // Custom Note Node component
 function NoteNode({ data, id }: NodeProps<NodeData>) {
@@ -405,12 +415,58 @@ const nodeTypes = {
   noteNode: NoteNode,
 };
 
+// Update the parseKindleClippings function
+function parseKindleClippings(text: string): ImportedNote[] {
+  const notes: ImportedNote[] = [];
+  const clippings = text.split('==========');
+  const MAX_PAGES = 5;
+  let pageCount = 0;
+
+  for (const clipping of clippings) {
+    if (pageCount >= MAX_PAGES) break;
+    
+    const lines = clipping.trim().split('\n');
+    if (lines.length >= 2) {
+      const titleLine = lines[0].trim();
+      const metaLine = lines[1].trim();
+      const content = lines.slice(3).join('\n').trim();
+
+      if (content) {
+        // Extract title and author from the first line
+        const titleMatch = titleLine.match(/(.*?)(?:\s*-\s*(.*)|$)/);
+        const title = titleMatch?.[1]?.trim() || 'Untitled';
+        const author = titleMatch?.[2]?.trim();
+
+        // Extract location and date from metadata line
+        const locationMatch = metaLine.match(/Location\s+(\d+-\d+)/);
+        const dateMatch = metaLine.match(/Added on\s+(.+)$/);
+
+        notes.push({
+          id: `kindle-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          title,
+          content,
+          author,
+          location: locationMatch?.[1],
+          date: dateMatch?.[1]
+        });
+        
+        pageCount++;
+      }
+    }
+  }
+
+  return notes;
+}
+
 export default function Home() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [showSidebar, setShowSidebar] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importedNotes, setImportedNotes] = useState<ImportedNote[]>([]);
+  const [notes, setNotes] = useState<NoteWithEmbedding[]>([]);
+  const [isGeneratingEmbeddings, setIsGeneratingEmbeddings] = useState(false);
+  const [embeddingsGenerated, setEmbeddingsGenerated] = useState(false);
 
   // Handle right-click to create new node
   const onPaneContextMenu = useCallback(
@@ -575,25 +631,44 @@ export default function Home() {
     const files = event.target.files;
     if (!files) return;
 
-    // Create an array to store all promises
     const fileReadPromises = Array.from(files).map((file) => {
-      return new Promise<ImportedNote>((resolve) => {
+      return new Promise<{ notes: ImportedNote[], message?: string }>((resolve) => {
         const reader = new FileReader();
         reader.onload = (e) => {
           const content = e.target?.result as string;
-          resolve({
-            id: `imported-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            title: file.name,
-            content: content
-          });
+          
+          // If file is My Clippings.txt, parse as Kindle clippings
+          if (file.name.toLowerCase() === 'my clippings.txt') {
+            const parsedNotes = parseKindleClippings(content);
+            resolve({
+              notes: parsedNotes,
+              message: 'Note: Only the first 5 pages of clippings were imported.'
+            });
+          } else {
+            // Handle regular markdown files as before
+            resolve({
+              notes: [{
+                id: `imported-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                title: file.name,
+                content: content
+              }]
+            });
+          }
         };
         reader.readAsText(file);
       });
     });
 
-    // Wait for all files to be read
-    Promise.all(fileReadPromises).then((newNotes) => {
-      setImportedNotes(prev => [...prev, ...newNotes]);
+    // Wait for all files to be read and flatten the array of arrays
+    Promise.all(fileReadPromises).then((results) => {
+      const allNotes = results.flatMap(result => result.notes);
+      setImportedNotes(prev => [...prev, ...allNotes]);
+      
+      // Show message if any of the results had a message
+      const messages = results.map(r => r.message).filter(Boolean);
+      if (messages.length > 0) {
+        alert(messages[0]); // Show the first message (in this case, about Kindle clippings limit)
+      }
     });
   }, []);
 
@@ -601,15 +676,94 @@ export default function Home() {
     fileInputRef.current?.click();
   };
 
+  // Update the sidebar notes display
+  const renderNoteItem = (note: ImportedNote) => (
+    <div 
+      key={note.id}
+      className={styles.noteItem}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData('application/reactflow', JSON.stringify({
+          text: note.content,
+          title: note.title,
+          author: note.author,
+          location: note.location,
+          date: note.date
+        }));
+      }}
+    >
+      <div className={styles.noteItemTitle}>
+        {note.title}
+        {note.author && <span className={styles.noteItemAuthor}> - {note.author}</span>}
+      </div>
+      <div className={styles.noteItemPreview}>
+        {note.content.substring(0, 50)}...
+      </div>
+      {note.location && <div className={styles.noteItemMeta}>Location: {note.location}</div>}
+    </div>
+  );
+
+  // Add this function to generate embeddings
+  const generateEmbeddings = async () => {
+    setIsGeneratingEmbeddings(true);
+    try {
+      const response = await fetch('/api/generate-embeddings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ notes }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setNotes(data.notes);
+        setEmbeddingsGenerated(true);
+      } else {
+        console.error('Failed to generate embeddings:', data.error);
+      }
+    } catch (error) {
+      console.error('Error generating embeddings:', error);
+    } finally {
+      setIsGeneratingEmbeddings(false);
+    }
+  };
+
+  // Modify your existing search function to use stored embeddings
+  const searchNotes = async (query: string) => {
+    try {
+      const response = await fetch('/api/vector-search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: query,
+          notes,
+          useStoredEmbeddings: embeddingsGenerated,
+        }),
+      });
+      // ... rest of your existing search function
+    } catch (error) {
+      console.error('Error searching notes:', error);
+    }
+  };
+
   return (
     <div className={styles.page}>
       <div className={styles.sidebar} style={{ display: showSidebar ? 'block' : 'none' }}>
         <button 
-          className={styles.toggleButton}
-          onClick={() => setShowSidebar(!showSidebar)}
+          onClick={generateEmbeddings}
+          disabled={isGeneratingEmbeddings || embeddingsGenerated}
+          className={styles.generateButton}
         >
-          {showSidebar ? '←' : '→'}
+          {isGeneratingEmbeddings 
+            ? 'Generating Embeddings...' 
+            : embeddingsGenerated 
+              ? 'Embeddings Generated' 
+              : 'Generate Embeddings'}
         </button>
+        
         <div className={styles.fileUpload}>
           <input
             ref={fileInputRef}
@@ -625,25 +779,35 @@ export default function Home() {
           >
             Import Markdown Files
           </label>
+
+          <input
+            type="file"
+            accept=".txt"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                const content = e.target?.result as string;
+                const kindleNotes = parseKindleClippings(content);
+                setImportedNotes(prev => [...prev, ...kindleNotes]);
+              };
+              reader.readAsText(file);
+            }}
+            className={styles.fileInput}
+            id="kindle-input"
+          />
+          <label 
+            className={styles.fileLabel}
+            htmlFor="kindle-input"
+          >
+            Import Kindle Clippings
+          </label>
         </div>
         <div className={styles.notesList}>
           {/* Show imported notes first */}
-          {importedNotes.map((note) => (
-            <div 
-              key={note.id}
-              className={styles.noteItem}
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.setData('application/reactflow', JSON.stringify({
-                  text: note.content,
-                  title: note.title
-                }));
-              }}
-            >
-              <div className={styles.noteItemTitle}>{note.title}</div>
-              {note.content.substring(0, 50)}...
-            </div>
-          ))}
+          {importedNotes.map(renderNoteItem)}
           {/* Then show sample notes */}
           <div className={styles.sectionDivider}>Sample Notes</div>
           {sampleNotes.map((note) => (
