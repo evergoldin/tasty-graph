@@ -365,3 +365,24 @@
   transform: translateY(0);
   box-shadow: none;
 }
+
+.suggestionPreview {
+  margin-bottom: 4px;
+}
+
+.similarityScore {
+  font-size: 0.8em;
+  color: #666;
+  font-style: italic;
+}
+
+.suggestionItem {
+  padding: 8px;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.suggestionItem:hover {
+  background-color: #f5f5f5;
+}

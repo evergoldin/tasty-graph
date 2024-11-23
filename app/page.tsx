@@ -44,6 +44,7 @@ type SuggestedNote = {
   id: string;
   text: string;
   preview: string;
+  similarity: number;
 };
 
 // Add this type near the top with other type definitions
@@ -65,6 +66,8 @@ type NodeData = {
     username: string;
     link: string;
   };
+  importedNotes?: ImportedNote[];
+  originalId?: string; // Add this field
 };
 
 // First, add this type near the top with other type definitions
@@ -204,21 +207,44 @@ function NoteNode({ data, id }: NodeProps<NodeData>) {
   };
 
   // Add this function to handle node click
-  const handleNodeClick = useCallback(() => {
-    // Get 3 random notes from sampleNotes (replace this with your database query)
-    const availableNotes = sampleNotes.filter(note => note.id !== id);
-    const randomNotes = [...availableNotes]
-      .sort(() => 0.5 - Math.random())
-      .slice(0, 3)
-      .map(note => ({
-        id: note.id,
-        text: note.text,
-        preview: note.text.substring(0, 100) + '...'
-      }));
+  const handleNodeClick = useCallback(async () => {
+    if (!data.text) return;
+    
+    setIsLoading(true);
+    try {
+      // Get all notes excluding the current one using originalId
+      const allNotes = [
+        ...sampleNotes.filter(note => note.id !== data.originalId),
+        ...(data.importedNotes || []).map(note => ({
+          id: note.id,
+          text: note.content
+        })).filter(note => note.id !== data.originalId)
+      ];
 
-    setSuggestedNotes(randomNotes);
-    setShowSuggestions(true);
-  }, [id]);
+      const response = await fetch('/api/vector-search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: data.text,
+          notes: allNotes
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch similar notes');
+      }
+
+      const { similarNotes } = await response.json();
+      setSuggestedNotes(similarNotes);
+      setShowSuggestions(true);
+    } catch (error) {
+      console.error('Error finding similar notes:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [data.text, data.importedNotes, data.originalId]);
 
   // Add function to handle suggestion selection
   const handleSuggestionSelect = useCallback((selectedNote: SuggestedNote) => {
@@ -233,7 +259,10 @@ function NoteNode({ data, id }: NodeProps<NodeData>) {
         x: parentNode.position.x - 300,
         y: parentNode.position.y - 100,
       },
-      data: { text: selectedNote.text },
+      data: { 
+        text: selectedNote.text,
+        importedNotes: data.importedNotes
+      },
     };
 
     // Create connection
@@ -246,7 +275,7 @@ function NoteNode({ data, id }: NodeProps<NodeData>) {
     setNodes((nodes) => [...nodes, newNode]);
     setEdges((edges) => [...edges, newEdge]);
     setShowSuggestions(false);
-  }, [id, getNode, setNodes, setEdges]);
+  }, [id, getNode, setNodes, setEdges, data.importedNotes]);
 
   return (
     <div 
@@ -359,7 +388,10 @@ function NoteNode({ data, id }: NodeProps<NodeData>) {
                   handleSuggestionSelect(note);
                 }}
               >
-                {note.preview}
+                <div className={styles.suggestionPreview}>{note.preview}</div>
+                <div className={styles.similarityScore}>
+                  Similarity: {(note.similarity * 100).toFixed(1)}%
+                </div>
               </div>
             ))}
           </div>
@@ -391,11 +423,14 @@ export default function Home() {
           x: event.clientX,
           y: event.clientY,
         },
-        data: { text: 'New note...' },
+        data: { 
+          text: 'New note...',
+          importedNotes
+        },
       };
       setNodes((nds) => [...nds, newNode]);
     },
-    [nodes, setNodes]
+    [nodes, setNodes, importedNotes]
   );
 
   // Handle dropping notes onto the canvas
@@ -428,7 +463,9 @@ export default function Home() {
             },
             data: { 
               title: noteData.title,
-              isTitle: true
+              isTitle: true,
+              importedNotes,
+              originalId: noteData.id // Store the original ID
             },
           };
 
@@ -439,6 +476,8 @@ export default function Home() {
             position,
             data: { 
               text: noteData.text,
+              importedNotes,
+              originalId: noteData.id // Store the original ID
             },
           };
 
@@ -459,13 +498,15 @@ export default function Home() {
             position,
             data: { 
               text: noteData.text,
+              importedNotes,
+              originalId: noteData.id // Store the original ID
             },
           };
           setNodes((nds) => [...nds, contentNode]);
         }
       }
     },
-    [nodes, edges, setNodes, setEdges]
+    [nodes, edges, setNodes, setEdges, importedNotes]
   );
 
   // Fix the edge creation type error
