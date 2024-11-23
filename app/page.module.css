@@ -70,22 +70,29 @@
 }
 
 .noteItem {
-  padding: 15px;
-  margin-bottom: 12px;
-  background: #333333;
-  border: 1px solid #404040;
-  border-radius: 6px;
-  cursor: move;
-  font-size: 14px;
-  line-height: 1.5;
-  color: #fff;
-  transition: all 0.2s ease;
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+  transition: background-color 0.2s;
 }
 
 .noteItem:hover {
-  background: #404040;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  background-color: #f5f5f5;
+}
+
+.noteItemTitle {
+  font-weight: bold;
+  margin-bottom: 4px;
+  color: #666;
+  font-size: 0.9em;
+}
+
+.sectionDivider {
+  padding: 8px;
+  font-size: 0.9em;
+  color: #666;
+  background-color: #f5f5f5;
+  margin: 12px 0;
 }
 
 .canvas {
@@ -276,4 +283,20 @@
   background: #404040;
   transform: translateY(-1px);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.titleNode {
+  background: #333333 !important;
+  border: 2px solid #505050 !important;
+  padding: 8px 12px;
+  border-radius: 4px;
+  min-width: 150px;
+  max-width: 300px;
+}
+
+.standaloneTitleText {
+  font-weight: 600;
+  font-size: 1.1em;
+  color: #fff;
+  text-align: center;
 }

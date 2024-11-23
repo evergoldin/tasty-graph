@@ -46,6 +46,27 @@ type SuggestedNote = {
   preview: string;
 };
 
+// Add this type near the top with other type definitions
+type ImportedNote = {
+  id: string;
+  title: string;
+  content: string;
+};
+
+// First, update the NodeData type to better handle titles
+type NodeData = {
+  text?: string;
+  image?: string;
+  title?: string;
+  id?: string;
+  isTitle?: boolean; // Add this field
+  credit?: {
+    name: string;
+    username: string;
+    link: string;
+  };
+};
+
 // Custom Note Node component
 function NoteNode({ data, id }: NodeProps<NodeData>) {
   const [showPlus, setShowPlus] = useState(false);
@@ -204,7 +225,7 @@ function NoteNode({ data, id }: NodeProps<NodeData>) {
 
   return (
     <div 
-      className={styles.noteNode}
+      className={`${styles.noteNode} ${data.isTitle ? styles.titleNode : ''}`}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onClick={handleNodeClick}
@@ -220,34 +241,39 @@ function NoteNode({ data, id }: NodeProps<NodeData>) {
         className={styles.handle}
       />
       <div className={styles.noteContent}>
-        {data.title && <div className={styles.noteTitle}>{data.title}</div>}
-        {data.text && <div>{data.text}</div>}
-        {data.image && (
-          <div className={styles.imageContainer}>
-            <img src={data.image} alt="Generated content" className={styles.nodeImage} />
-            {data.credit && (
-              <a 
-                href={data.credit.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={styles.imageCredit}
-              >
-                Photo by {data.credit.name}
-              </a>
+        {data.isTitle ? (
+          <div className={styles.standaloneTitleText}>{data.title}</div>
+        ) : (
+          <>
+            {data.text && <div>{data.text}</div>}
+            {data.image && (
+              <div className={styles.imageContainer}>
+                <img src={data.image} alt="Generated content" className={styles.nodeImage} />
+                {data.credit && (
+                  <a 
+                    href={data.credit.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={styles.imageCredit}
+                  >
+                    Photo by {data.credit.name}
+                  </a>
+                )}
+              </div>
             )}
-          </div>
-        )}
-        {showPlus && data.text && (
-          <button 
-            className={styles.plusButton}
-            onClick={(e) => {
-              e.stopPropagation();
-              generateImageNode();
-            }}
-            disabled={isLoading}
-          >
-            {isLoading ? '...' : '+'}
-          </button>
+            {showPlus && data.text && (
+              <button 
+                className={styles.plusButton}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  generateImageNode();
+                }}
+                disabled={isLoading}
+              >
+                {isLoading ? '...' : '+'}
+              </button>
+            )}
+          </>
         )}
       </div>
       
@@ -289,24 +315,12 @@ const nodeTypes = {
   noteNode: NoteNode,
 };
 
-// Add a new type for node data
-type NodeData = {
-  text?: string;
-  image?: string;
-  title?: string;
-  id?: string;
-  credit?: {
-    name: string;
-    username: string;
-    link: string;
-  };
-};
-
 export default function Home() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [showSidebar, setShowSidebar] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importedNotes, setImportedNotes] = useState<ImportedNote[]>([]);
 
   // Handle right-click to create new node
   const onPaneContextMenu = useCallback(
@@ -345,17 +359,55 @@ export default function Home() {
           y: event.clientY - reactFlowBounds.top,
         };
 
-        const newNode: Node<NodeData> = {
-          id: `node-${nodes.length + 1}`,
-          type: 'noteNode',
-          position,
-          data: { text: noteData.text },
-        };
+        // Create title node if there's a title
+        if (noteData.title) {
+          const titleNode: Node<NodeData> = {
+            id: `node-title-${nodes.length + 1}`,
+            type: 'noteNode',
+            position: {
+              x: position.x,
+              y: position.y - 80,
+            },
+            data: { 
+              title: noteData.title,
+              isTitle: true
+            },
+          };
 
-        setNodes((nds) => [...nds, newNode]);
+          // Create content node
+          const contentNode: Node<NodeData> = {
+            id: `node-${nodes.length + 1}`,
+            type: 'noteNode',
+            position,
+            data: { 
+              text: noteData.text,
+            },
+          };
+
+          // Create edge connecting title to content
+          const newEdge: Edge = {
+            id: `edge-${edges.length + 1}`,
+            source: titleNode.id,
+            target: contentNode.id,
+          };
+
+          setNodes((nds) => [...nds, titleNode, contentNode]);
+          setEdges((eds) => [...eds, newEdge]);
+        } else {
+          // If no title, just create the content node
+          const contentNode: Node<NodeData> = {
+            id: `node-${nodes.length + 1}`,
+            type: 'noteNode',
+            position,
+            data: { 
+              text: noteData.text,
+            },
+          };
+          setNodes((nds) => [...nds, contentNode]);
+        }
       }
     },
-    [nodes, setNodes]
+    [nodes, edges, setNodes, setEdges]
   );
 
   // Fix the edge creation type error
@@ -424,25 +476,16 @@ export default function Home() {
     const files = event.target.files;
     if (!files) return;
 
-    // Calculate a grid layout
-    const GRID_SPACING = 300;
-    const NODES_PER_ROW = 3;
-
     // Create an array to store all promises
     const fileReadPromises = Array.from(files).map((file) => {
-      return new Promise<Node<NodeData>>((resolve) => {
+      return new Promise<ImportedNote>((resolve) => {
         const reader = new FileReader();
         reader.onload = (e) => {
           const content = e.target?.result as string;
           resolve({
-            id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            type: 'noteNode',
-            data: { 
-              text: content,
-              title: file.name 
-            },
-            // We'll set the position after we have all nodes
-            position: { x: 0, y: 0 },
+            id: `imported-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            title: file.name,
+            content: content
           });
         };
         reader.readAsText(file);
@@ -450,22 +493,8 @@ export default function Home() {
     });
 
     // Wait for all files to be read
-    Promise.all(fileReadPromises).then((newNodes) => {
-      // Position all nodes in a grid
-      const positionedNodes = newNodes.map((node, index) => {
-        const row = Math.floor(index / NODES_PER_ROW);
-        const col = index % NODES_PER_ROW;
-        
-        return {
-          ...node,
-          position: {
-            x: 100 + (col * GRID_SPACING),
-            y: 100 + (row * GRID_SPACING),
-          }
-        };
-      });
-
-      setNodes((nds) => [...nds, ...positionedNodes]);
+    Promise.all(fileReadPromises).then((newNotes) => {
+      setImportedNotes(prev => [...prev, ...newNotes]);
     });
   }, []);
 
@@ -499,6 +528,25 @@ export default function Home() {
           </label>
         </div>
         <div className={styles.notesList}>
+          {/* Show imported notes first */}
+          {importedNotes.map((note) => (
+            <div 
+              key={note.id}
+              className={styles.noteItem}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData('application/reactflow', JSON.stringify({
+                  text: note.content,
+                  title: note.title
+                }));
+              }}
+            >
+              <div className={styles.noteItemTitle}>{note.title}</div>
+              {note.content.substring(0, 50)}...
+            </div>
+          ))}
+          {/* Then show sample notes */}
+          <div className={styles.sectionDivider}>Sample Notes</div>
           {sampleNotes.map((note) => (
             <div 
               key={note.id}
