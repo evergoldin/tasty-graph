@@ -13,7 +13,7 @@ interface CanvasProps {
   nodes: Node[];
   links: NodeLink[];
   onNodesChange: (nodes: Node[]) => void;
-  onLinksChange: (links: NodeLink[]) => void;
+  onLinksChange: (links: NodeLink[] | ((prevLinks: NodeLink[]) => NodeLink[])) => void;
 }
 
 export default function Canvas({ nodes, links, onNodesChange, onLinksChange }: CanvasProps) {
@@ -32,10 +32,13 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange }: C
           const iconContainer = group.append('g')
             .attr('class', 'icon-container');
           
-          // Example SVG icon (placeholder)
+          // SVG icon
           iconContainer.append('path')
-            .attr('d', 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5')
+            .attr('d', 'M28 4H12C10.9391 4 9.92172 4.42143 9.17157 5.17157C8.42143 5.92172 8 6.93913 8 8V40C8 41.0609 8.42143 42.0783 9.17157 42.8284C9.92172 43.5786 10.9391 44 12 44H36C37.0609 44 38.0783 43.5786 38.8284 42.8284C39.5786 42.0783 40 41.0609 40 40V16M28 4L40 16M28 4V16H40M32 26H16M32 34H16M20 18H16')
             .attr('stroke', 'currentColor')
+            .attr('stroke-width', '4')
+            .attr('stroke-linecap', 'round')
+            .attr('stroke-linejoin', 'round')
             .attr('fill', 'none');
           
           // Title text
@@ -165,7 +168,19 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange }: C
       .force("link", forceLink(links)
         .id((d: any) => d.id)
         .distance(150)
-      );
+      )
+      .force("charge", d3.forceManyBody().strength(-50))
+      .alphaDecay(0.1)
+      .velocityDecay(0.6)
+      .on('tick', () => {
+        // Only update positions of nodes that aren't being dragged
+        nodes.forEach(node => {
+          if (!node.fx && !node.fy) {
+            node.x = node.x || 0;
+            node.y = node.y || 0;
+          }
+        });
+      });
 
     // Create links
     const linkGroup = svg.append('g')
@@ -192,17 +207,29 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange }: C
     
     drag.on('start', (event) => {
       if (!event.active) simulation.alphaTarget(0.3).restart();
+      event.subject.fx = event.subject.x;
+      event.subject.fy = event.subject.y;
+      // Fix all other nodes in place
+      nodes.forEach(node => {
+        if (node.id !== event.subject.id) {
+          node.fx = node.x;
+          node.fy = node.y;
+        }
+      });
     })
     .on('drag', function(event, d) {
-      d3.select(this)
-        .attr('transform', `translate(${event.x}, ${event.y})`);
       d.fx = event.x;
       d.fy = event.y;
+      d3.select(this).attr('transform', `translate(${event.x}, ${event.y})`);
     })
     .on('end', (event) => {
       if (!event.active) simulation.alphaTarget(0);
-      event.subject.fx = null;
-      event.subject.fy = null;
+      // Release all nodes
+      nodes.forEach(node => {
+        node.fx = null;
+        node.fy = null;
+      });
+      simulation.alpha(0.1).restart();
     });
 
     nodeGroups.call(drag);
@@ -211,21 +238,23 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange }: C
     simulation.on('tick', () => {
       linkElements
         .attr('x1', d => {
-          const source = nodes.find(n => n.id === d.source) || nodes.find(n => n.id === (d.source as any).id);
+          const source = typeof d.source === 'object' ? d.source : nodes.find(n => n.id === d.source);
           return source?.x || 0;
         })
         .attr('y1', d => {
-          const source = nodes.find(n => n.id === d.source) || nodes.find(n => n.id === (d.source as any).id);
+          const source = typeof d.source === 'object' ? d.source : nodes.find(n => n.id === d.source);
           return source?.y || 0;
         })
         .attr('x2', d => {
-          const target = nodes.find(n => n.id === d.target) || nodes.find(n => n.id === (d.target as any).id);
+          const target = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
           return target?.x || 0;
         })
         .attr('y2', d => {
-          const target = nodes.find(n => n.id === d.target) || nodes.find(n => n.id === (d.target as any).id);
+          const target = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
           return target?.y || 0;
         });
+
+      nodeGroups.attr('transform', d => `translate(${d.x || 0},${d.y || 0})`);
     });
   }, [nodes, links, createDragBehavior]);
 

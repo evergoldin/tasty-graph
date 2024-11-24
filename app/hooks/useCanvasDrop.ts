@@ -5,7 +5,7 @@ import { ContentBlock } from '../types/content';
 export function useCanvasDrop(
   nodes: Node[],
   onNodesChange: (nodes: Node[]) => void,
-  onLinksChange: (links: NodeLink[]) => void
+  onLinksChange: (links: NodeLink[] | ((prevLinks: NodeLink[]) => NodeLink[])) => void
 ) {
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -22,7 +22,7 @@ export function useCanvasDrop(
       id: crypto.randomUUID(),
       type: 'icon',
       title: content.fileName,
-      iconPath: 'M12 2L2 7l10 5 10-5-10-5z',
+      iconPath: 'M28 4H12C10.9391 4 9.92172 4.42143 9.17157 5.17157C8.42143 5.92172 8 6.93913 8 8V40C8 41.0609 8.42143 42.0783 9.17157 42.8284C9.92172 43.5786 10.9391 44 12 44H36C37.0609 44 38.0783 43.5786 38.8284 42.8284C39.5786 42.0783 40 41.0609 40 40V16M28 4L40 16M28 4V16H40M32 26H16M32 34H16M20 18H16',
       x,
       y
     };
@@ -41,7 +41,7 @@ export function useCanvasDrop(
     };
 
     onNodesChange([...nodes, iconNode, textNode]);
-    onLinksChange([link]);
+    onLinksChange((prevLinks: NodeLink[]) => [...prevLinks, link]);
   }, [nodes, onNodesChange, onLinksChange]);
 
   return { handleDragOver, handleDrop };
