@@ -11,6 +11,7 @@ import { createGridPattern, createBackground, CANVAS_CONSTANTS } from '../servic
 import ContentPopup from './ContentPopup';
 import { ContentBlock } from '../types/content';
 import { findSimilarContents, SimilarContent } from '../utils/embeddings';
+import { getUnsplashImage } from '../utils/unsplash';
 
 interface CanvasProps {
   nodes: Node[];
@@ -83,33 +84,33 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange, sid
           const textNode = group.append('g')
             .attr('class', 'text-container')
             .on('click', async function(this: SVGGElement, event: any, d: unknown) {
-                event.stopPropagation();
-                if (!event.defaultPrevented && (d as Node).type === 'text') {
-                  const rect = (event.target as SVGElement).getBoundingClientRect();
+              event.stopPropagation();
+              if (!event.defaultPrevented && (d as Node).type === 'text') {
+                const rect = (event.target as SVGElement).getBoundingClientRect();
+              
+                // Show popup immediately with loading state
+                setPopupState({
+                  isOpen: true,
+                  x: rect.left,
+                  y: rect.top,
+                  contents: null,
+                  isLoading: true,
+                  sourceNodeId: (d as Node).id
+                });
                 
-                  // Show popup immediately with loading state
-                  setPopupState({
-                    isOpen: true,
-                    x: rect.left,
-                    y: rect.top,
-                    contents: null,
-                    isLoading: true,
-                    sourceNodeId: (d as Node).id
-                  });
-                  
-                  // Fetch similar contents
-                  const similarContents = await findSimilarContents((d as TextNode).content, sidebarContents);
-                  
-                  // Update popup with contents
-                  setPopupState(prev => prev ? {
-                    ...prev,
-                    contents: similarContents,
-                    isLoading: false
-                  } : null);
-                }
+                // Fetch similar contents
+                const similarContents = await findSimilarContents((d as TextNode).content, sidebarContents);
+                
+                // Update popup with contents
+                setPopupState(prev => prev ? {
+                  ...prev,
+                  contents: similarContents,
+                  isLoading: false
+                } : null);
+              }
             });
-          
-          // Create background rectangle first (we'll adjust its size later)
+
+          // Create background rectangle first
           const backgroundRect = textNode.append('rect')
             .attr('rx', 5)
             .attr('class', styles.textNode);
@@ -120,8 +121,8 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange, sid
             .attr('x', 16)
             .attr('y', 24);
           
-          const maxWidth = 268; // 300px - 32px padding
-          let totalHeight = 24; // Initial y position
+          const maxWidth = 268;
+          let totalHeight = 24;
           
           // Split content into words
           const words = d.content.split(/\s+/);
@@ -162,10 +163,78 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange, sid
           });
           
           // Calculate final height and set background rectangle size
-          totalHeight += 24; // Add bottom padding
+          totalHeight += 24;
           backgroundRect
             .attr('width', 300)
             .attr('height', totalHeight);
+          
+          // Add image generation button container AFTER the text content
+          const buttonContainer = textNode.append('g')
+            .attr('class', 'image-button')
+            .style('opacity', 0)
+            .attr('transform', `translate(310, ${totalHeight / 2})`) // Center vertically
+            .on('click', async function(event: any, d: any) {
+              event.stopPropagation();
+              
+              try {
+                // Get search query from OpenAI
+                const queryResponse = await fetch('/api/image-query', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ text: d.content })
+                });
+                const { query } = await queryResponse.json();
+                
+                // Get image from Unsplash
+                const imageUrl = await getUnsplashImage(query);
+                
+                // Create new image node
+                const newNode: ImageNode = {
+                  id: crypto.randomUUID(),
+                  type: 'image',
+                  imageUrl,
+                  width: 300,
+                  height: 200,
+                  x: d.x + 350,
+                  y: d.y
+                };
+                
+                onNodesChange([...nodes, newNode]);
+              } catch (error) {
+                console.error('Failed to generate image:', error);
+              }
+            });
+
+          // Add button circle
+          buttonContainer.append('circle')
+            .attr('r', 15)
+            .attr('fill', 'var(--background-secondary)')
+            .attr('stroke', 'var(--border-color)')
+            .attr('stroke-width', 1);
+
+          // Add image icon
+          buttonContainer.append('path')
+            .attr('d', 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z')
+            .attr('transform', 'translate(-8, -8) scale(0.7)')
+            .attr('stroke', 'currentColor')
+            .attr('stroke-width', 2)
+            .attr('stroke-linecap', 'round')
+            .attr('stroke-linejoin', 'round')
+            .attr('fill', 'none');
+
+          // Show/hide button on hover
+          textNode.on('mouseenter', function() {
+            d3.select(this).select('.image-button')
+              .transition()
+              .duration(200)
+              .style('opacity', 1);
+          })
+          .on('mouseleave', function() {
+            d3.select(this).select('.image-button')
+              .transition()
+              .duration(200)
+              .style('opacity', 0);
+          });
           
           break;
 

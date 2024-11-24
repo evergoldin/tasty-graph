@@ -101,4 +101,23 @@ g.node.dragging {
   font-weight: 700;
   fill: var(--text-primary);
   text-transform: uppercase;
+}
+
+.image-button {
+  cursor: pointer;
+  pointer-events: all;
+}
+
+.image-button:hover circle {
+  fill: var(--background-hover);
+}
+
+/* Add these styles to ensure the button is visible */
+.text-container:hover .image-button {
+  opacity: 1;
+}
+
+.text-container .image-button {
+  opacity: 0;
+  transition: opacity 0.2s ease;
 } 
