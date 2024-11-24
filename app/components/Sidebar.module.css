@@ -1,23 +1,20 @@
 .sidebar {
   grid-column: 1;
-  align-self: center;
-
   padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  height: 75%;
   width: 100%;
-
   border-radius: 16px;
-
   background-color: var(--background-secondary);
+  height: 75vh;
 }
 
 .controls {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex-shrink: 0;
+  margin-bottom: 16px;
 }
 
 .importButton {
@@ -30,22 +27,24 @@
 }
 
 .importedContent {
+  overflow-y: auto;
+  flex: 1;
+  padding-right: 8px;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  overflow-y: auto;
+  min-height: 0;
 }
 
 .contentBlock {
   padding: 16px;
   border: 1px solid #ccc;
-  height: 96px;
-  overflow: hidden;
+  min-height: 96px;
+  flex-shrink: 0;
+  background-color: var(--background-secondary);
 }
 
 .contentHeader {
-  display: flex;
-  justify-content: space-between;
   margin-bottom: 4px;
   border-bottom: 1px solid #ccc;
 }

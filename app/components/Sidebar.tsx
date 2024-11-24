@@ -51,7 +51,6 @@ export default function Sidebar({
                     >
                         <div className={styles.contentHeader}>
                             <h3>{content.fileName}</h3>
-                            <span>{content.timestamp.toLocaleDateString()}</span>
                         </div>
                         <div className={styles.contentText}>
                             {content.content}
