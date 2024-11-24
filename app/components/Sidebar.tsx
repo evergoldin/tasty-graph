@@ -62,6 +62,9 @@ export default function Sidebar({
                         <div className={styles.contentHeader}>
                             <h3>{content.fileName.replace(/\.[^/.]+$/, '')}</h3>
                         </div>
+                        <p className={styles.contentPreview}>
+                            {content.content}
+                        </p>
                     </div>
                 ))}
             </div>
