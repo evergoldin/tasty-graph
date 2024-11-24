@@ -5,6 +5,8 @@ export interface BaseNode {
   type: NodeType;
   x?: number;
   y?: number;
+  fx?: number | null;
+  fy?: number | null;
 }
 
 export interface IconNode extends BaseNode {

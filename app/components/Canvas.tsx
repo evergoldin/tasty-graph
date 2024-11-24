@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import * as d3 from 'd3';
+import { forceSimulation, forceLink } from 'd3';
 import styles from './Canvas.module.css';
 import { ImageNode, Node, NodeLink } from '../types/nodes';
 import { useCanvasDrop } from '../hooks/useCanvasDrop';
@@ -48,18 +49,61 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange }: C
           const textNode = group.append('g')
             .attr('class', 'text-container');
           
+          // Create text element
           const textElement = textNode.append('text')
-            .text(d.content)
-            .attr('x', 10)
-            .attr('y', 20);
+            .attr('class', styles.nodeText)
+            .attr('x', 16)
+            .attr('y', 24);
+          
+          // Split text into words and create tspans for wrapping
+          const words = d.content.split(/\s+/);
+          let line: string[] = [];
+          let lineNumber = 0;
+          const maxWidth = 300 - 32; // 300px max width minus padding
+          
+          // Create temporary tspan to measure text
+          let tspan = textElement.append('tspan')
+            .attr('x', 16)
+            .attr('dy', 0);
+          
+          words.forEach(word => {
+            line.push(word);
+            tspan.text(line.join(' '));
+            
+            if ((tspan.node()?.getComputedTextLength() || 0) > maxWidth) {
+              line.pop();
+              if (line.length) {
+                tspan.text(line.join(' '));
+                line = [word];
+                lineNumber++;
+                tspan = textElement.append('tspan')
+                  .attr('x', 16)
+                  .attr('dy', '1.2em')
+                  .text(word);
+              }
+            }
+          });
+          
+          // Add remaining words
+          if (line.length > 0) {
+            if (lineNumber === 0) {
+              tspan.text(line.join(' '));
+            } else {
+              textElement.append('tspan')
+                .attr('x', 16)
+                .attr('dy', '1.2em')
+                .text(line.join(' '));
+            }
+          }
           
           // Calculate bbox and create background
           const bbox = (textElement.node() as SVGTextElement).getBBox();
           textNode.insert('rect', 'text')
-            .attr('width', bbox.width + 20)
-            .attr('height', bbox.height + 20)
+            .attr('width', Math.min(300, bbox.width + 32))
+            .attr('height', bbox.height + 32)
             .attr('rx', 5)
             .attr('class', styles.textNode);
+          
           break;
 
         case 'image':
@@ -116,6 +160,13 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange }: C
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
 
+    // Create force simulation
+    const simulation = forceSimulation(nodes)
+      .force("link", forceLink(links)
+        .id((d: any) => d.id)
+        .distance(150)
+      );
+
     // Create links
     const linkGroup = svg.append('g')
       .attr('class', 'links');
@@ -124,23 +175,7 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange }: C
       .data(links)
       .enter()
       .append('line')
-      .attr('class', styles.link)
-      .attr('x1', d => {
-        const sourceNode = nodes.find(n => n.id === d.source);
-        return sourceNode?.x || 0;
-      })
-      .attr('y1', d => {
-        const sourceNode = nodes.find(n => n.id === d.source);
-        return sourceNode?.y || 0;
-      })
-      .attr('x2', d => {
-        const targetNode = nodes.find(n => n.id === d.target);
-        return targetNode?.x || 0;
-      })
-      .attr('y2', d => {
-        const targetNode = nodes.find(n => n.id === d.target);
-        return targetNode?.y || 0;
-      });
+      .attr('class', styles.link);
 
     // Render nodes
     const nodeGroups = svg.selectAll('.node')
@@ -151,9 +186,47 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange }: C
       .attr('transform', d => `translate(${d.x || 0},${d.y || 0})`);
 
     renderNode(nodeGroups);
-    
+
     // Apply drag behavior
-    nodeGroups.call(createDragBehavior());
+    const drag = createDragBehavior();
+    
+    drag.on('start', (event) => {
+      if (!event.active) simulation.alphaTarget(0.3).restart();
+    })
+    .on('drag', function(event, d) {
+      d3.select(this)
+        .attr('transform', `translate(${event.x}, ${event.y})`);
+      d.fx = event.x;
+      d.fy = event.y;
+    })
+    .on('end', (event) => {
+      if (!event.active) simulation.alphaTarget(0);
+      event.subject.fx = null;
+      event.subject.fy = null;
+    });
+
+    nodeGroups.call(drag);
+
+    // Update positions on each tick
+    simulation.on('tick', () => {
+      linkElements
+        .attr('x1', d => {
+          const source = nodes.find(n => n.id === d.source) || nodes.find(n => n.id === (d.source as any).id);
+          return source?.x || 0;
+        })
+        .attr('y1', d => {
+          const source = nodes.find(n => n.id === d.source) || nodes.find(n => n.id === (d.source as any).id);
+          return source?.y || 0;
+        })
+        .attr('x2', d => {
+          const target = nodes.find(n => n.id === d.target) || nodes.find(n => n.id === (d.target as any).id);
+          return target?.x || 0;
+        })
+        .attr('y2', d => {
+          const target = nodes.find(n => n.id === d.target) || nodes.find(n => n.id === (d.target as any).id);
+          return target?.y || 0;
+        });
+    });
   }, [nodes, links, createDragBehavior]);
 
   return (

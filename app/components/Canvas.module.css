@@ -29,9 +29,8 @@
 
 .nodeText {
   font-size: 14px;
-  font-weight: bold;
-  pointer-events: none;
-  user-select: none;
+  fill: var(--text-primary);
+  white-space: pre-wrap;
 }
 
 .nodeContent {
@@ -64,6 +63,12 @@ g.node.dragging {
   stroke: #999;
   stroke-opacity: 0.6;
   stroke-width: 1px;
+  pointer-events: none;
+}
+
+.dragging .link {
+  stroke: #666;
+  stroke-width: 2px;
 }
 
 .textNode {

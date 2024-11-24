@@ -24,9 +24,6 @@ export function useNodeDrag(
       .on('drag', function(event, d) {
         d3.select(this)
           .attr('transform', `translate(${event.x}, ${event.y})`);
-      })
-      .on('end', function(event, d) {
-        d3.select(this).classed(styles.dragging, false);
         
         const updatedNodes = nodes.map(node => {
           if (node.id === d.id) {
@@ -40,6 +37,9 @@ export function useNodeDrag(
         });
         
         onNodesChange(updatedNodes);
+      })
+      .on('end', function(event) {
+        d3.select(this).classed(styles.dragging, false);
       });
   }, [nodes, onNodesChange, styles]);
 } 
