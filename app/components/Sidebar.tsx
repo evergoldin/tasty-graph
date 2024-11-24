@@ -60,10 +60,7 @@ export default function Sidebar({
                         onDragStart={(e) => handleDragStart(e, content)}
                     >
                         <div className={styles.contentHeader}>
-                            <h3>{content.fileName}</h3>
-                        </div>
-                        <div className={styles.contentText}>
-                            {content.content}
+                            <h3>{content.fileName.replace(/\.[^/.]+$/, '')}</h3>
                         </div>
                     </div>
                 ))}
