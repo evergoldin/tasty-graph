@@ -34,26 +34,33 @@ export function useFileImport() {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = '.md,.txt';
+        input.multiple = true;
         
         input.onchange = async (event) => {
-            const file = (event.target as HTMLInputElement).files?.[0];
-            if (!file) return;
-
-            if (!validateFile(file)) return;
+            const files = Array.from((event.target as HTMLInputElement).files || []);
+            if (files.length === 0) return;
 
             setIsLoading(true);
             try {
-                const text = await file.text();
-                const newContent: ImportedContent = {
-                    id: crypto.randomUUID(),
-                    content: text,
-                    fileName: file.name,
-                    timestamp: new Date()
-                };
-                
-                setImportedContents(prev => [...prev, newContent]);
+                const newContents = await Promise.all(
+                    files.map(async (file) => {
+                        if (!validateFile(file)) {
+                            throw new Error(`Invalid file: ${file.name}`);
+                        }
+
+                        const text = await file.text();
+                        return {
+                            id: crypto.randomUUID(),
+                            content: text,
+                            fileName: file.name,
+                            timestamp: new Date()
+                        };
+                    })
+                );
+
+                setImportedContents(prev => [...prev, ...newContents]);
             } catch (err) {
-                setError('Failed to read file. Please try again.');
+                setError('Failed to read one or more files. Please try again.');
                 console.error(err);
             } finally {
                 setIsLoading(false);
