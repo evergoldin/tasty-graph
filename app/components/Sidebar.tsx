@@ -8,6 +8,7 @@ interface SidebarProps {
   onDragContent: (content: ContentBlock) => void;
   importedContents: ContentBlock[];
   handleFileImport: () => void;
+  handleKindleImport: () => void;
   isLoading: boolean;
   error: string | null;
 }
@@ -16,6 +17,7 @@ export default function Sidebar({
   onDragContent, 
   importedContents, 
   handleFileImport, 
+  handleKindleImport, 
   isLoading, 
   error 
 }: SidebarProps) {
@@ -32,6 +34,14 @@ export default function Sidebar({
                     className={styles.importButton}
                 >
                     {isLoading ? 'Importing...' : 'Import from Markdown File'}
+                </button>
+                
+                <button 
+                    onClick={handleKindleImport}
+                    disabled={isLoading}
+                    className={styles.importButton}
+                >
+                    {isLoading ? 'Importing...' : 'Import from Kindle Notes'}
                 </button>
                 
                 {error && (

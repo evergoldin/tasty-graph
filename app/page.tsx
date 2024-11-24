@@ -11,7 +11,7 @@ import { useFileImport } from './hooks/useFileImport';
 export default function Home() {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [links, setLinks] = useState<NodeLink[]>([]);
-  const { importedContents, handleFileImport, isLoading, error } = useFileImport();
+  const { importedContents, handleFileImport, handleKindleImport, isLoading, error } = useFileImport();
 
   const handleDragContent = (content: ContentBlock) => {
     const iconNode: IconNode = {
@@ -46,6 +46,7 @@ export default function Home() {
         onDragContent={handleDragContent}
         importedContents={importedContents}
         handleFileImport={handleFileImport}
+        handleKindleImport={handleKindleImport}
         isLoading={isLoading}
         error={error}
       />

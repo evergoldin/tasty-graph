@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { parseKindleClippings } from '../utils/kindleParser';
 
 interface ImportedContent {
     id: string;
@@ -70,9 +71,49 @@ export function useFileImport() {
         input.click();
     };
 
+    const handleKindleImport = () => {
+        setError(null);
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.txt';
+        
+        input.onchange = async (event) => {
+            const files = Array.from((event.target as HTMLInputElement).files || []);
+            if (files.length === 0) return;
+
+            setIsLoading(true);
+            try {
+                const file = files[0]; // Only process the first file
+                if (!file.name.toLowerCase().endsWith('.txt')) {
+                    throw new Error('Please select a Kindle clippings text file');
+                }
+
+                const text = await file.text();
+                const kindleNotes = parseKindleClippings(text);
+                
+                const newContents = kindleNotes.map(note => ({
+                    id: crypto.randomUUID(),
+                    content: note.highlight,
+                    fileName: `${note.title} (Location ${note.location})`,
+                    timestamp: new Date(note.date)
+                }));
+
+                setImportedContents(prev => [...prev, ...newContents]);
+            } catch (err) {
+                setError('Failed to parse Kindle notes. Please ensure this is a valid My Clippings.txt file.');
+                console.error(err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        input.click();
+    };
+
     return {
         importedContents,
         handleFileImport,
+        handleKindleImport,
         isLoading,
         error
     };
