@@ -4,7 +4,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import * as d3 from 'd3';
 import { forceSimulation, forceLink } from 'd3';
 import styles from './Canvas.module.css';
-import { ImageNode, Node, NodeLink, TextNode } from '../types/nodes';
+import { IconNode, ImageNode, Node, NodeLink, TextNode } from '../types/nodes';
 import { useCanvasDrop } from '../hooks/useCanvasDrop';
 import { useNodeDrag } from '../hooks/useNodeDrag';
 import { createGridPattern, createBackground, CANVAS_CONSTANTS } from '../services/canvasUtils';
@@ -47,20 +47,34 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange, sid
           const iconContainer = group.append('g')
             .attr('class', 'icon-container');
           
+          // Invisible circle for link targeting
+          iconContainer.append('circle')
+            .attr('r', 24)
+            .attr('cx', 0)
+            .attr('cy', 0)
+            .attr('fill', 'transparent')
+            .attr('stroke', 'none');
+          
           // SVG icon
           iconContainer.append('path')
-            .attr('d', 'M28 4H12C10.9391 4 9.92172 4.42143 9.17157 5.17157C8.42143 5.92172 8 6.93913 8 8V40C8 41.0609 8.42143 42.0783 9.17157 42.8284C9.92172 43.5786 10.9391 44 12 44H36C37.0609 44 38.0783 43.5786 38.8284 42.8284C39.5786 42.0783 40 41.0609 40 40V16M28 4L40 16M28 4V16H40M32 26H16M32 34H16M20 18H16')
+            .attr('d', d.iconPath)
+            .attr('transform', 'translate(-20, -20) scale(0.833)')
             .attr('stroke', 'currentColor')
             .attr('stroke-width', '4')
             .attr('stroke-linecap', 'round')
             .attr('stroke-linejoin', 'round')
-            .attr('fill', 'none');
+            .attr('fill', 'var(--background-primary)');
           
           // Title text
           iconContainer.append('text')
             .attr('text-anchor', 'middle')
             .attr('y', 40)
-            .text(d.title);
+            .attr('class', styles.iconTitle)
+            .text(function(d: any) {
+              const iconNode = d as IconNode;
+              return iconNode.title.replace(/\.(md|txt)$/, '').toUpperCase();
+            })
+            .call(wrap, 160); // Wrap text at 160px
           break;
 
         case 'text':
@@ -83,60 +97,63 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange, sid
               }
             });
           
+          // Create background rectangle first (we'll adjust its size later)
+          const backgroundRect = textNode.append('rect')
+            .attr('rx', 5)
+            .attr('class', styles.textNode);
+          
           // Create text element
           const textElement = textNode.append('text')
             .attr('class', styles.nodeText)
             .attr('x', 16)
             .attr('y', 24);
           
-          // Split text into words and create tspans for wrapping
+          const maxWidth = 268; // 300px - 32px padding
+          let totalHeight = 24; // Initial y position
+          
+          // Split content into words
           const words = d.content.split(/\s+/);
           let line: string[] = [];
-          let lineNumber = 0;
-          const maxWidth = 300 - 32; // 300px max width minus padding
-          
-          // Create temporary tspan to measure text
           let tspan = textElement.append('tspan')
             .attr('x', 16)
             .attr('dy', 0);
           
-          words.forEach(word => {
-            line.push(word);
-            tspan.text(line.join(' '));
+          // Process each word
+          words.forEach((word, i) => {
+            const testLine = [...line, word];
+            tspan.text(testLine.join(' '));
             
             if ((tspan.node()?.getComputedTextLength() || 0) > maxWidth) {
-              line.pop();
-              if (line.length) {
+              if (line.length > 0) {
+                // Set the current line
                 tspan.text(line.join(' '));
+                // Start new line
                 line = [word];
-                lineNumber++;
+                totalHeight += 20; // Increment height for new line
                 tspan = textElement.append('tspan')
                   .attr('x', 16)
                   .attr('dy', '1.2em')
                   .text(word);
+              } else {
+                // Handle case where single word is too long
+                line = [word];
+                tspan.text(word);
               }
+            } else {
+              line = testLine;
+            }
+            
+            // Handle last line
+            if (i === words.length - 1) {
+              tspan.text(line.join(' '));
             }
           });
           
-          // Add remaining words
-          if (line.length > 0) {
-            if (lineNumber === 0) {
-              tspan.text(line.join(' '));
-            } else {
-              textElement.append('tspan')
-                .attr('x', 16)
-                .attr('dy', '1.2em')
-                .text(line.join(' '));
-            }
-          }
-          
-          // Calculate bbox and create background
-          const bbox = (textElement.node() as SVGTextElement).getBBox();
-          textNode.insert('rect', 'text')
-            .attr('width', Math.min(300, bbox.width + 32))
-            .attr('height', bbox.height + 32)
-            .attr('rx', 5)
-            .attr('class', styles.textNode);
+          // Calculate final height and set background rectangle size
+          totalHeight += 24; // Add bottom padding
+          backgroundRect
+            .attr('width', 300)
+            .attr('height', totalHeight);
           
           break;
 
@@ -229,6 +246,7 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange, sid
       .enter()
       .append('g')
       .attr('class', 'node')
+      .attr('data-id', d => d.id)
       .attr('transform', d => `translate(${d.x || 0},${d.y || 0})`);
 
     renderNode(nodeGroups);
@@ -278,11 +296,27 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange, sid
         })
         .attr('x2', d => {
           const target = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
-          return target?.x || 0;
+          if (!target) return 0;
+          
+          // For text nodes, calculate center point
+          if (target.type === 'text') {
+            const textNode = d3.select(`g.node[data-id="${target.id}"] rect`).node() as SVGRectElement;
+            const bbox = textNode?.getBoundingClientRect();
+            return (target.x || 0) + (bbox?.width || 0) / 2;
+          }
+          return target.x || 0;
         })
         .attr('y2', d => {
           const target = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
-          return target?.y || 0;
+          if (!target) return 0;
+          
+          // For text nodes, calculate center point
+          if (target.type === 'text') {
+            const textNode = d3.select(`g.node[data-id="${target.id}"] rect`).node() as SVGRectElement;
+            const bbox = textNode?.getBoundingClientRect();
+            return (target.y || 0) + (bbox?.height || 0) / 2;
+          }
+          return target.y || 0;
         });
 
       nodeGroups.attr('transform', d => `translate(${d.x || 0},${d.y || 0})`);
@@ -334,4 +368,37 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange, sid
       )}
     </div>
   );
+} 
+
+// Add the wrap function
+function wrap(text: d3.Selection<SVGTextElement, any, any, any>, width: number) {
+  text.each(function() {
+    const text = d3.select(this);
+    const words = text.text().split(/\s+/).reverse();
+    let word;
+    let line: string[] = [];
+    let lineNumber = 0;
+    const lineHeight = 1.1; // ems
+    const y = text.attr("y");
+    const dy = 0;
+    let tspan = text.text(null).append("tspan")
+      .attr("x", 0)
+      .attr("y", y)
+      .attr("dy", dy + "em");
+
+    while (word = words.pop()) {
+      line.push(word);
+      tspan.text(line.join(" "));
+      if ((tspan.node()?.getComputedTextLength() || 0) > width) {
+        line.pop();
+        tspan.text(line.join(" "));
+        line = [word];
+        tspan = text.append("tspan")
+          .attr("x", 0)
+          .attr("y", y)
+          .attr("dy", ++lineNumber * lineHeight + dy + "em")
+          .text(word);
+      }
+    }
+  });
 } 

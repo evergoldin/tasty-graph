@@ -31,6 +31,7 @@
   font-size: 14px;
   fill: var(--text-primary);
   white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .nodeContent {
@@ -60,20 +61,25 @@ g.node.dragging {
 }
 
 .link {
-  stroke: #999;
-  stroke-opacity: 0.6;
-  stroke-width: 1px;
+  stroke: black;
+  stroke-width: 3px;
   pointer-events: none;
 }
 
 .dragging .link {
-  stroke: #666;
-  stroke-width: 2px;
+  stroke: #333;
+  stroke-width: 4px;
 }
 
 .textNode {
-  fill: white;
-  stroke: #ccc;
+  fill: #1ABAB8;
+  stroke: black;
+  stroke-width: 3px;
+}
+
+.textNode:hover {
+  fill: #14dcd8;
+  transition: all 0.2s ease;
 }
 
 .icon-container {
@@ -82,4 +88,17 @@ g.node.dragging {
 
 .image-container {
   cursor: move;
+}
+
+.iconBackground {
+  fill: white;
+  stroke: #ccc;
+  stroke-width: 1px;
+}
+
+.iconTitle {
+  font-size: 16px;
+  font-weight: 700;
+  fill: var(--text-primary);
+  text-transform: uppercase;
 } 
