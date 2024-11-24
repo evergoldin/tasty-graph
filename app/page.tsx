@@ -63,14 +63,14 @@ type NodeData = {
   image?: string;
   title?: string;
   id?: string;
-  isTitle?: boolean; // Add this field
+  isTitle?: boolean;
   credit?: {
     name: string;
     username: string;
     link: string;
   };
   importedNotes?: ImportedNote[];
-  originalId?: string; // Add this field
+  originalId?: string;
 };
 
 // First, add this type near the top with other type definitions
@@ -85,6 +85,11 @@ interface NoteWithEmbedding {
   text: string;
   embedding?: number[];
 }
+
+// First, add this utility function near the top of the file
+const splitIntoSentences = (text: string) => {
+  return text.split(/([.!?]+\s+)/).filter(Boolean);
+};
 
 // Custom Note Node component
 function NoteNode({ data, id }: NodeProps<NodeData>) {
@@ -271,7 +276,7 @@ function NoteNode({ data, id }: NodeProps<NodeData>) {
       },
       data: { 
         text: selectedNote.text,
-        importedNotes: data.importedNotes
+        importedNotes: data.importedNotes,
       },
     };
 
@@ -286,6 +291,29 @@ function NoteNode({ data, id }: NodeProps<NodeData>) {
     setEdges((edges) => [...edges, newEdge]);
     setShowSuggestions(false);
   }, [id, getNode, setNodes, setEdges, data.importedNotes]);
+
+  // Add this function inside the NoteNode component
+  const renderTextWithRandomBold = (text: string) => {
+    const sentences = splitIntoSentences(text);
+    // Randomly select ~30% of sentences to bold
+    const shouldBeBold = sentences.map(() => Math.random() < 0.3);
+    
+    return (
+      <>
+        {sentences.map((sentence, index) => (
+          <span 
+            key={index} 
+            style={{ 
+              fontWeight: shouldBeBold[index] ? 600 : 400,
+              display: 'inline',
+            }}
+          >
+            {sentence}
+          </span>
+        ))}
+      </>
+    );
+  };
 
   return (
     <div 
@@ -311,7 +339,7 @@ function NoteNode({ data, id }: NodeProps<NodeData>) {
           <div className={styles.standaloneTitleText}>{data.title}</div>
         ) : (
           <>
-            {data.text && <div>{data.text}</div>}
+            {data.text && renderTextWithRandomBold(data.text)}
             {data.image && (
               <div className={styles.imageContainer}>
                 <img src={data.image} alt="Generated content" className={styles.nodeImage} />
@@ -481,7 +509,7 @@ export default function Home() {
         },
         data: { 
           text: 'New note...',
-          importedNotes
+          importedNotes,
         },
       };
       setNodes((nds) => [...nds, newNode]);
@@ -521,7 +549,7 @@ export default function Home() {
               title: noteData.title,
               isTitle: true,
               importedNotes,
-              originalId: noteData.id // Store the original ID
+              originalId: noteData.id,
             },
           };
 
@@ -533,7 +561,7 @@ export default function Home() {
             data: { 
               text: noteData.text,
               importedNotes,
-              originalId: noteData.id // Store the original ID
+              originalId: noteData.id,
             },
           };
 
@@ -555,7 +583,7 @@ export default function Home() {
             data: { 
               text: noteData.text,
               importedNotes,
-              originalId: noteData.id // Store the original ID
+              originalId: noteData.id,
             },
           };
           setNodes((nds) => [...nds, contentNode]);

@@ -17,8 +17,8 @@ body {
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
+  background: #f5f1eb;
+  color: #1a1a1a;
   font-family: Arial, Helvetica, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -37,7 +37,7 @@ a {
 
 @media (prefers-color-scheme: dark) {
   html {
-    color-scheme: dark;
+    color-scheme: light;
   }
 }
 
@@ -50,5 +50,27 @@ a {
 }
 
 .react-flow__handle {
-  @apply w-3 h-3 bg-blue-500;
+  @apply w-2 h-2;
+  background: #c4b5a2 !important;
+  border: none !important;
+}
+
+.react-flow__handle:hover {
+  background: #a39584 !important;
+}
+
+.react-flow__container {
+  background: #f5f1eb !important;
+}
+
+.react-flow__pane {
+  background: #f5f1eb !important;
+}
+
+.react-flow__background {
+  display: none !important;
+}
+
+.react-flow__viewport {
+  background: #f5f1eb !important;
 }
