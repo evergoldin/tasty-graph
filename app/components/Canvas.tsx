@@ -1,23 +1,114 @@
 "use client";
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import * as d3 from 'd3';
 import styles from './Canvas.module.css';
-import { ContentBlock } from '../types/content';
+import { ImageNode, Node, NodeLink } from '../types/nodes';
 import { useCanvasDrop } from '../hooks/useCanvasDrop';
 import { useNodeDrag } from '../hooks/useNodeDrag';
 import { createGridPattern, createBackground, CANVAS_CONSTANTS } from '../services/canvasUtils';
 
 interface CanvasProps {
-  nodes: ContentBlock[];
-  onNodesChange: (nodes: ContentBlock[]) => void;
+  nodes: Node[];
+  links: NodeLink[];
+  onNodesChange: (nodes: Node[]) => void;
+  onLinksChange: (links: NodeLink[]) => void;
 }
 
-export default function Canvas({ nodes, onNodesChange }: CanvasProps) {
+export default function Canvas({ nodes, links, onNodesChange, onLinksChange }: CanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const createDragBehavior = useNodeDrag(nodes, onNodesChange, styles);
-  const { handleDragOver, handleDrop } = useCanvasDrop(nodes, onNodesChange);
+  const { handleDragOver, handleDrop } = useCanvasDrop(nodes, onNodesChange, onLinksChange);
+
+  const renderNode = (nodeGroup: d3.Selection<SVGGElement, Node, any, any>) => {
+    nodeGroup.each(function(d) {
+      const group = d3.select(this);
+      
+      switch(d.type) {
+        case 'icon':
+          // Icon container
+          const iconContainer = group.append('g')
+            .attr('class', 'icon-container');
+          
+          // Example SVG icon (placeholder)
+          iconContainer.append('path')
+            .attr('d', 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5')
+            .attr('stroke', 'currentColor')
+            .attr('fill', 'none');
+          
+          // Title text
+          iconContainer.append('text')
+            .attr('text-anchor', 'middle')
+            .attr('y', 40)
+            .text(d.title);
+          break;
+
+        case 'text':
+          const textNode = group.append('g')
+            .attr('class', 'text-container');
+          
+          const textElement = textNode.append('text')
+            .text(d.content)
+            .attr('x', 10)
+            .attr('y', 20);
+          
+          // Calculate bbox and create background
+          const bbox = (textElement.node() as SVGTextElement).getBBox();
+          textNode.insert('rect', 'text')
+            .attr('width', bbox.width + 20)
+            .attr('height', bbox.height + 20)
+            .attr('rx', 5)
+            .attr('class', styles.textNode);
+          break;
+
+        case 'image':
+          const imageContainer = group.append('g')
+            .attr('class', 'image-container');
+          
+          imageContainer.append('image')
+            .attr('href', d.imageUrl)
+            .attr('width', d.width)
+            .attr('height', d.height);
+          break;
+      }
+    });
+  };
+
+  const handlePaste = useCallback((e: ClipboardEvent) => {
+    e.preventDefault();
+    const items = e.clipboardData?.items;
+
+    if (!items) return;
+
+    for (const item of items) {
+      if (item.type.indexOf('image') !== -1) {
+        const file = item.getAsFile();
+        if (!file) continue;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const imageUrl = event.target?.result as string;
+          const newNode: ImageNode = {
+            id: crypto.randomUUID(),
+            type: 'image',
+            imageUrl,
+            width: 200,  // Default width
+            height: 200, // Default height
+            x: 100,
+            y: 100
+          };
+          onNodesChange([...nodes, newNode]);
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+  }, [nodes, onNodesChange]);
+
+  useEffect(() => {
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [handlePaste]);
 
   useEffect(() => {
     if (!svgRef.current) return;
@@ -25,59 +116,45 @@ export default function Canvas({ nodes, onNodesChange }: CanvasProps) {
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
 
-    // Setup canvas
-    createGridPattern(svg);
-    createBackground(svg, styles);
+    // Create links
+    const linkGroup = svg.append('g')
+      .attr('class', 'links');
 
-    // Create a container for all nodes
-    const nodesContainer = svg.append("g").attr("class", "nodes-container");
+    const linkElements = linkGroup.selectAll('line')
+      .data(links)
+      .enter()
+      .append('line')
+      .attr('class', styles.link)
+      .attr('x1', d => {
+        const sourceNode = nodes.find(n => n.id === d.source);
+        return sourceNode?.x || 0;
+      })
+      .attr('y1', d => {
+        const sourceNode = nodes.find(n => n.id === d.source);
+        return sourceNode?.y || 0;
+      })
+      .attr('x2', d => {
+        const targetNode = nodes.find(n => n.id === d.target);
+        return targetNode?.x || 0;
+      })
+      .attr('y2', d => {
+        const targetNode = nodes.find(n => n.id === d.target);
+        return targetNode?.y || 0;
+      });
 
     // Render nodes
-    const nodeGroups = nodesContainer
-      .selectAll<SVGGElement, ContentBlock>("g.node")
-      .data(nodes, d => d.id)
-      .join(
-        enter => {
-          const nodeGroup = enter.append("g")
-            .attr("class", "node")
-            .attr("transform", d => `translate(${d.x || 100}, ${d.y || 100})`);
+    const nodeGroups = svg.selectAll('.node')
+      .data(nodes)
+      .enter()
+      .append('g')
+      .attr('class', 'node')
+      .attr('transform', d => `translate(${d.x || 0},${d.y || 0})`);
 
-          // Create a group for the node content
-          const contentGroup = nodeGroup.append("g")
-            .attr("class", "node-content");
-
-          // Add rectangles for nodes
-          contentGroup.append("rect")
-            .attr("width", CANVAS_CONSTANTS.NODE_WIDTH)
-            .attr("height", CANVAS_CONSTANTS.NODE_HEIGHT)
-            .attr("rx", CANVAS_CONSTANTS.BORDER_RADIUS)
-            .attr("ry", CANVAS_CONSTANTS.BORDER_RADIUS)
-            .attr("class", styles.node);
-
-          // Add text to nodes
-          contentGroup.append("text")
-            .attr("x", CANVAS_CONSTANTS.TEXT_PADDING)
-            .attr("y", 25)
-            .text(d => d.fileName)
-            .attr("class", styles.nodeText);
-
-          // Add content text (truncated)
-          contentGroup.append("text")
-            .attr("x", CANVAS_CONSTANTS.TEXT_PADDING)
-            .attr("y", 50)
-            .text(d => `${d.content.substring(0, CANVAS_CONSTANTS.CONTENT_MAX_LENGTH)}...`)
-            .attr("class", styles.nodeContent);
-
-          return nodeGroup;
-        },
-        update => update.attr("transform", d => `translate(${d.x || 100}, ${d.y || 100})`),
-        exit => exit.remove()
-      );
-
+    renderNode(nodeGroups);
+    
     // Apply drag behavior
     nodeGroups.call(createDragBehavior());
-
-  }, [nodes, createDragBehavior]);
+  }, [nodes, links, createDragBehavior]);
 
   return (
     <div 

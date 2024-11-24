@@ -58,4 +58,23 @@ g.node.dragging {
 
 .dragging .node-content {
   transform: scale(1.02);
+}
+
+.link {
+  stroke: #999;
+  stroke-opacity: 0.6;
+  stroke-width: 1px;
+}
+
+.textNode {
+  fill: white;
+  stroke: #ccc;
+}
+
+.icon-container {
+  cursor: pointer;
+}
+
+.image-container {
+  cursor: move;
 } 
