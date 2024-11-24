@@ -1,11 +1,11 @@
-import { ContentBlock } from '../types/content';
+import { SimilarContent } from '../utils/embeddings';
 import styles from './ContentPopup.module.css';
 
 interface ContentPopupProps {
   x: number;
   y: number;
-  contents: ContentBlock[];
-  onSelect: (content: ContentBlock) => void;
+  contents: SimilarContent[];
+  onSelect: (content: SimilarContent) => void;
 }
 
 export default function ContentPopup({ x, y, contents, onSelect }: ContentPopupProps) {
@@ -14,7 +14,7 @@ export default function ContentPopup({ x, y, contents, onSelect }: ContentPopupP
       className={styles.popup}
       style={{
         left: x,
-        top: y,
+        top: y
       }}
     >
       {contents.map((content) => (
@@ -23,8 +23,12 @@ export default function ContentPopup({ x, y, contents, onSelect }: ContentPopupP
           className={styles.popupItem}
           onClick={() => onSelect(content)}
         >
-          <h4>{content.fileName}</h4>
-          <p>{content.content.substring(0, 100)}...</p>
+          <div className={styles.popupContent}>
+            {content.content}
+          </div>
+          <div className={styles.similarityScore}>
+            Similarity: {(content.similarity * 100).toFixed(1)}%
+          </div>
         </div>
       ))}
     </div>

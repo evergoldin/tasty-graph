@@ -10,6 +10,7 @@ import { useNodeDrag } from '../hooks/useNodeDrag';
 import { createGridPattern, createBackground, CANVAS_CONSTANTS } from '../services/canvasUtils';
 import ContentPopup from './ContentPopup';
 import { ContentBlock } from '../types/content';
+import { findSimilarContents, SimilarContent } from '../utils/embeddings';
 
 interface CanvasProps {
   nodes: Node[];
@@ -29,7 +30,7 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange, sid
     isOpen: boolean;
     x: number;
     y: number;
-    contents: ContentBlock[];
+    contents: SimilarContent[];
   } | null>(null);
 
   const handleCanvasClick = useCallback(() => {
@@ -65,19 +66,19 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange, sid
         case 'text':
           const textNode = group.append('g')
             .attr('class', 'text-container')
-            .on('click', (event, d) => {
-              event.stopPropagation(); // Prevent canvas click from firing
-              if (!event.defaultPrevented) { // Only trigger if not part of a drag
-                const rect = (event.target as SVGElement).getBoundingClientRect();
-                const randomContents = sidebarContents
-                  .sort(() => 0.5 - Math.random())
-                  .slice(0, 3);
+            .on('click', async function(this: SVGGElement, event: any, d: unknown) {
+                event.stopPropagation();
+                if (!event.defaultPrevented && (d as Node).type === 'text') {
+                  const rect = (event.target as SVGElement).getBoundingClientRect();
+                
+                // Find similar contents
+                const similarContents = await findSimilarContents(d.content, sidebarContents);
                 
                 setPopupState({
                   isOpen: true,
                   x: rect.left,
                   y: rect.top,
-                  contents: randomContents
+                  contents: similarContents
                 });
               }
             });
@@ -293,16 +294,13 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange, sid
   const handleNodeClick = useCallback((event: MouseEvent, node: Node) => {
     if (node.type === 'text') {
       event.stopPropagation();
-      // Get 3 random contents
-      const randomContents = [...sidebarContents]
-        .sort(() => 0.5 - Math.random())
-        .slice(0, 3);
-      
-      setPopupState({
-        isOpen: true,
-        x: event.clientX,
-        y: event.clientY,
-        contents: randomContents
+      findSimilarContents(node.content, sidebarContents).then(similarContents => {
+        setPopupState({
+          isOpen: true,
+          x: event.clientX,
+          y: event.clientY,
+          contents: similarContents
+        });
       });
     }
   }, [sidebarContents]);
