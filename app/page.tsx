@@ -46,6 +46,24 @@ type SuggestedNote = {
   preview: string;
 };
 
+// Add this helper function at the top of the file
+function addRandomBoldToText(text: string): string {
+  // Split into sentences (accounting for multiple punctuation types)
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+  
+  if (sentences.length <= 1) return text;
+  
+  // Pick a random sentence
+  const randomIndex = Math.floor(Math.random() * sentences.length);
+  
+  // Return the text with the random sentence wrapped in bold tags
+  return sentences.map((sentence, index) => 
+    index === randomIndex ? 
+      `<strong>${sentence}</strong>` : 
+      sentence
+  ).join('');
+}
+
 // Custom Note Node component
 function NoteNode({ data, id }: NodeProps<NodeData>) {
   const [showPlus, setShowPlus] = useState(false);
@@ -142,7 +160,6 @@ function NoteNode({ data, id }: NodeProps<NodeData>) {
           },
           data: { 
             image: imageUrl,
-            title: 'Generated Image',
             credit
           },
         };
@@ -221,7 +238,13 @@ function NoteNode({ data, id }: NodeProps<NodeData>) {
       />
       <div className={styles.noteContent}>
         {data.title && <div className={styles.noteTitle}>{data.title}</div>}
-        {data.text && <div>{data.text}</div>}
+        {data.text && (
+          <div 
+            dangerouslySetInnerHTML={{ 
+              __html: addRandomBoldToText(data.text) 
+            }} 
+          />
+        )}
         {data.image && (
           <div className={styles.imageContainer}>
             <img src={data.image} alt="Generated content" className={styles.nodeImage} />
