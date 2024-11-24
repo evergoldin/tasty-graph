@@ -11,6 +11,7 @@ import { createGridPattern, createBackground, CANVAS_CONSTANTS } from '../servic
 import ContentPopup from './ContentPopup';
 import { ContentBlock } from '../types/content';
 import { findSimilarContents, SimilarContent } from '../utils/embeddings';
+import { generateSearchQuery } from '../utils/imageGeneration';
 
 interface CanvasProps {
   nodes: Node[];
@@ -79,24 +80,45 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange, sid
 
         case 'text':
           const textNode = group.append('g')
-            .attr('class', 'text-container')
-            .on('click', async function(this: SVGGElement, event: any, d: unknown) {
-                event.stopPropagation();
-                if (!event.defaultPrevented && (d as Node).type === 'text') {
-                  const rect = (event.target as SVGElement).getBoundingClientRect();
-                
-                // Find similar contents
-                const similarContents = await findSimilarContents(d.content, sidebarContents);
-                
-                setPopupState({
-                  isOpen: true,
-                  x: rect.left,
-                  y: rect.top,
-                  contents: similarContents
-                });
+            .attr('class', 'text-container');
+
+          // Add image generation button
+          const buttonGroup = textNode.append('g')
+            .attr('class', styles.imageButton)
+            .style('opacity', '0') // Hidden by default
+            .on('click', function(this: SVGGElement, event: MouseEvent, d: unknown) {
+              event.stopPropagation();
+              const node = d as Node;
+              if (node.type === 'text') {
+                handleImageGeneration(node);
               }
             });
-          
+
+          // Add button circle
+          buttonGroup.append('circle')
+            .attr('r', 12)
+            .attr('cx', 320) // Position to right of text node
+            .attr('cy', 20)
+            .attr('fill', 'var(--background-secondary)');
+
+          // Add image icon to button
+          buttonGroup.append('path')
+            .attr('d', 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z')
+            .attr('transform', 'translate(308, 8) scale(0.5)')
+            .attr('stroke', 'currentColor')
+            .attr('stroke-width', '2')
+            .attr('stroke-linecap', 'round')
+            .attr('stroke-linejoin', 'round')
+            .attr('fill', 'none');
+
+          // Show/hide button on hover
+          textNode.on('mouseenter', function() {
+            buttonGroup.style('opacity', '1');
+          })
+          .on('mouseleave', function() {
+            buttonGroup.style('opacity', '0');
+          });
+
           // Create background rectangle first (we'll adjust its size later)
           const backgroundRect = textNode.append('rect')
             .attr('rx', 5)
@@ -161,10 +183,31 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange, sid
           const imageContainer = group.append('g')
             .attr('class', 'image-container');
           
-          imageContainer.append('image')
-            .attr('href', d.imageUrl)
+          // Add a background rectangle for better visibility
+          imageContainer.append('rect')
             .attr('width', d.width)
-            .attr('height', d.height);
+            .attr('height', d.height)
+            .attr('fill', 'white')
+            .attr('rx', 5);
+          
+          // Add the image with proper attributes
+          imageContainer.append('image')
+            .attr('href', (d as ImageNode).imageUrl)
+            .attr('width', d.width)
+            .attr('height', d.height)
+            .attr('preserveAspectRatio', 'xMidYMid meet')
+            .on('error', function() {
+              console.error('Failed to load image:', (d as ImageNode).imageUrl);
+            });
+
+          // Optional: Add a border
+          imageContainer.append('rect')
+            .attr('width', d.width)
+            .attr('height', d.height)
+            .attr('fill', 'none')
+            .attr('stroke', 'var(--border-color)')
+            .attr('stroke-width', 1)
+            .attr('rx', 5);
           break;
       }
     });
@@ -338,6 +381,37 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange, sid
       });
     }
   }, [sidebarContents]);
+
+  const handleImageGeneration = async (textNode: TextNode) => {
+    try {
+      const searchQuery = await generateSearchQuery(textNode.content);
+      console.log('Search query:', searchQuery);
+      
+      const response = await fetch('/api/pinterest-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ search: searchQuery })
+      });
+      
+      const { imageUrl } = await response.json();
+      console.log('Received image URL:', imageUrl);
+      
+      const newNode: ImageNode = {
+        id: crypto.randomUUID(),
+        type: 'image',
+        imageUrl,
+        width: 200,
+        height: 200,
+        x: (textNode.x || 0) + 250,
+        y: textNode.y || 0
+      };
+      
+      console.log('Creating new image node:', newNode);
+      onNodesChange([...nodes, newNode]);
+    } catch (error) {
+      console.error('Failed to generate image:', error);
+    }
+  };
 
   return (
     <div 

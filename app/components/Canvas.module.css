@@ -101,4 +101,13 @@ g.node.dragging {
   font-weight: 700;
   fill: var(--text-primary);
   text-transform: uppercase;
+}
+
+.imageButton {
+  cursor: pointer;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.imageButton:hover circle {
+  fill: var(--background-tertiary);
 } 
