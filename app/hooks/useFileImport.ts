@@ -17,12 +17,12 @@ export function useFileImport() {
         const maxSize = 5 * 1024 * 1024; 
 
         if (!validTypes.some(type => file.name.toLowerCase().endsWith(type))) {
-            setError('Please select a markdown or text file');
+            setError('Please select markdown or text files only');
             return false;
         }
 
         if (file.size > maxSize) {
-            setError('File size must be less than 5MB');
+            setError(`File "${file.name}" exceeds 5MB limit`);
             return false;
         }
 
@@ -34,26 +34,34 @@ export function useFileImport() {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = '.md,.txt';
+        input.multiple = true;
         
         input.onchange = async (event) => {
-            const file = (event.target as HTMLInputElement).files?.[0];
-            if (!file) return;
-
-            if (!validateFile(file)) return;
+            const files = Array.from((event.target as HTMLInputElement).files || []);
+            if (files.length === 0) return;
 
             setIsLoading(true);
+            const newContents: ImportedContent[] = [];
+
             try {
-                const text = await file.text();
-                const newContent: ImportedContent = {
-                    id: crypto.randomUUID(),
-                    content: text,
-                    fileName: file.name,
-                    timestamp: new Date()
-                };
+                for (const file of files) {
+                    if (!validateFile(file)) continue;
+
+                    const text = await file.text();
+                    const newContent: ImportedContent = {
+                        id: crypto.randomUUID(),
+                        content: text,
+                        fileName: file.name,
+                        timestamp: new Date()
+                    };
+                    newContents.push(newContent);
+                }
                 
-                setImportedContents(prev => [...prev, newContent]);
+                if (newContents.length > 0) {
+                    setImportedContents(prev => [...prev, ...newContents]);
+                }
             } catch (err) {
-                setError('Failed to read file. Please try again.');
+                setError('Failed to read one or more files. Please try again.');
                 console.error(err);
             } finally {
                 setIsLoading(false);
