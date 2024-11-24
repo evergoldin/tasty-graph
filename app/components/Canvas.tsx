@@ -30,7 +30,9 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange, sid
     isOpen: boolean;
     x: number;
     y: number;
-    contents: SimilarContent[];
+    contents: SimilarContent[] | null;
+    isLoading: boolean;
+    sourceNodeId: string | null;
   } | null>(null);
 
   const handleCanvasClick = useCallback(() => {
@@ -85,16 +87,26 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange, sid
                 if (!event.defaultPrevented && (d as Node).type === 'text') {
                   const rect = (event.target as SVGElement).getBoundingClientRect();
                 
-                // Find similar contents
-                const similarContents = await findSimilarContents(d.content, sidebarContents);
-                
-                setPopupState({
-                  isOpen: true,
-                  x: rect.left,
-                  y: rect.top,
-                  contents: similarContents
-                });
-              }
+                  // Show popup immediately with loading state
+                  setPopupState({
+                    isOpen: true,
+                    x: rect.left,
+                    y: rect.top,
+                    contents: null,
+                    isLoading: true,
+                    sourceNodeId: (d as Node).id
+                  });
+                  
+                  // Fetch similar contents
+                  const similarContents = await findSimilarContents((d as TextNode).content, sidebarContents);
+                  
+                  // Update popup with contents
+                  setPopupState(prev => prev ? {
+                    ...prev,
+                    contents: similarContents,
+                    isLoading: false
+                  } : null);
+                }
             });
           
           // Create background rectangle first (we'll adjust its size later)
@@ -333,7 +345,9 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange, sid
           isOpen: true,
           x: event.clientX,
           y: event.clientY,
-          contents: similarContents
+          contents: similarContents,
+          isLoading: false,
+          sourceNodeId: node.id
         });
       });
     }
@@ -353,6 +367,7 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange, sid
           x={popupState.x}
           y={popupState.y}
           contents={popupState.contents}
+          isLoading={popupState.isLoading}
           onSelect={(content) => {
             const newNode: TextNode = {
               id: crypto.randomUUID(),
@@ -361,7 +376,15 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange, sid
               x: popupState.x + 100,
               y: popupState.y
             };
+
+            // Create a new link between the original node and the new node
+            const newLink: NodeLink = {
+              source: popupState.sourceNodeId!, // We'll add this to the state
+              target: newNode.id
+            };
+
             onNodesChange([...nodes, newNode]);
+            onLinksChange(prevLinks => [...prevLinks, newLink]);
             setPopupState(null);
           }}
         />
