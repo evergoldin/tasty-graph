@@ -1,47 +1,57 @@
 .sidebar {
-  padding: 1rem;
+  grid-column: 1;
+  align-self: center;
+
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  height: 100vh;
-  width: 300px;
-  border-right: 1px solid #ccc;
+  gap: 16px;
+  height: 75%;
+  width: 100%;
+
+  border-radius: 16px;
+
+  background-color: var(--background-secondary);
 }
 
 .controls {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 8px;
 }
 
 .importButton {
-  padding: 0.5rem;
+  padding: 8px;
 }
 
 .error {
-  padding: 0.5rem;
+  padding: 8px;
   color: red;
 }
 
 .importedContent {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 16px;
   overflow-y: auto;
 }
 
 .contentBlock {
-  padding: 1rem;
+  padding: 16px;
   border: 1px solid #ccc;
+  height: 96px;
+  overflow: hidden;
 }
 
 .contentHeader {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 0.5rem;
+  margin-bottom: 4px;
   border-bottom: 1px solid #ccc;
 }
 
 .contentText {
-  white-space: pre-wrap;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 } 
