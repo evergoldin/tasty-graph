@@ -1,22 +1,25 @@
 "use client";
 
-import { useFileImport } from '../hooks/useFileImport';
 import styles from './Sidebar.module.css';
 import { DragEvent } from 'react';
+import { ContentBlock } from '../types/content';
 
 interface SidebarProps {
-  onDragContent: (content: any) => void;
+  onDragContent: (content: ContentBlock) => void;
+  importedContents: ContentBlock[];
+  handleFileImport: () => void;
+  isLoading: boolean;
+  error: string | null;
 }
 
-export default function Sidebar({ onDragContent }: SidebarProps) {
-    const {
-        importedContents,
-        handleFileImport,
-        isLoading,
-        error
-    } = useFileImport();
-
-    const handleDragStart = (e: DragEvent<HTMLDivElement>, content: any) => {
+export default function Sidebar({ 
+  onDragContent, 
+  importedContents, 
+  handleFileImport, 
+  isLoading, 
+  error 
+}: SidebarProps) {
+    const handleDragStart = (e: DragEvent<HTMLDivElement>, content: ContentBlock) => {
         e.dataTransfer.setData('application/json', JSON.stringify(content));
     };
 

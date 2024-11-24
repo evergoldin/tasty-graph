@@ -6,17 +6,19 @@ import Sidebar from './components/Sidebar';
 import Canvas from './components/Canvas';
 import { IconNode, Node, NodeLink, TextNode } from './types/nodes';
 import { ContentBlock } from './types/content';
+import { useFileImport } from './hooks/useFileImport';
 
 export default function Home() {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [links, setLinks] = useState<NodeLink[]>([]);
+  const { importedContents, handleFileImport, isLoading, error } = useFileImport();
 
   const handleDragContent = (content: ContentBlock) => {
     const iconNode: IconNode = {
       id: crypto.randomUUID(),
       type: 'icon',
       title: content.fileName,
-      iconPath: 'M12 2L2 7l10 5 10-5-10-5z', // Default icon path
+      iconPath: 'M12 2L2 7l10 5 10-5-10-5z',
       x: 100,
       y: 100
     };
@@ -40,12 +42,19 @@ export default function Home() {
 
   return (
     <main className={styles.main}>
-      <Sidebar onDragContent={handleDragContent} />
+      <Sidebar 
+        onDragContent={handleDragContent}
+        importedContents={importedContents}
+        handleFileImport={handleFileImport}
+        isLoading={isLoading}
+        error={error}
+      />
       <Canvas 
         nodes={nodes} 
         links={links}
         onNodesChange={setNodes}
         onLinksChange={setLinks}
+        sidebarContents={importedContents}
       />
     </main>
   );

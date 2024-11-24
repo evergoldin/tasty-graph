@@ -1,26 +1,40 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import * as d3 from 'd3';
 import { forceSimulation, forceLink } from 'd3';
 import styles from './Canvas.module.css';
-import { ImageNode, Node, NodeLink } from '../types/nodes';
+import { ImageNode, Node, NodeLink, TextNode } from '../types/nodes';
 import { useCanvasDrop } from '../hooks/useCanvasDrop';
 import { useNodeDrag } from '../hooks/useNodeDrag';
 import { createGridPattern, createBackground, CANVAS_CONSTANTS } from '../services/canvasUtils';
+import ContentPopup from './ContentPopup';
+import { ContentBlock } from '../types/content';
 
 interface CanvasProps {
   nodes: Node[];
   links: NodeLink[];
   onNodesChange: (nodes: Node[]) => void;
   onLinksChange: (links: NodeLink[] | ((prevLinks: NodeLink[]) => NodeLink[])) => void;
+  sidebarContents: ContentBlock[];
 }
 
-export default function Canvas({ nodes, links, onNodesChange, onLinksChange }: CanvasProps) {
+export default function Canvas({ nodes, links, onNodesChange, onLinksChange, sidebarContents }: CanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const createDragBehavior = useNodeDrag(nodes, onNodesChange, styles);
   const { handleDragOver, handleDrop } = useCanvasDrop(nodes, onNodesChange, onLinksChange);
+
+  const [popupState, setPopupState] = useState<{
+    isOpen: boolean;
+    x: number;
+    y: number;
+    contents: ContentBlock[];
+  } | null>(null);
+
+  const handleCanvasClick = useCallback(() => {
+    setPopupState(null);
+  }, []);
 
   const renderNode = (nodeGroup: d3.Selection<SVGGElement, Node, any, any>) => {
     nodeGroup.each(function(d) {
@@ -50,7 +64,23 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange }: C
 
         case 'text':
           const textNode = group.append('g')
-            .attr('class', 'text-container');
+            .attr('class', 'text-container')
+            .on('click', (event, d) => {
+              event.stopPropagation(); // Prevent canvas click from firing
+              if (!event.defaultPrevented) { // Only trigger if not part of a drag
+                const rect = (event.target as SVGElement).getBoundingClientRect();
+                const randomContents = sidebarContents
+                  .sort(() => 0.5 - Math.random())
+                  .slice(0, 3);
+                
+                setPopupState({
+                  isOpen: true,
+                  x: rect.left,
+                  y: rect.top,
+                  contents: randomContents
+                });
+              }
+            });
           
           // Create text element
           const textElement = textNode.append('text')
@@ -256,7 +286,26 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange }: C
 
       nodeGroups.attr('transform', d => `translate(${d.x || 0},${d.y || 0})`);
     });
+
+    svg.on('click', handleCanvasClick);
   }, [nodes, links, createDragBehavior]);
+
+  const handleNodeClick = useCallback((event: MouseEvent, node: Node) => {
+    if (node.type === 'text') {
+      event.stopPropagation();
+      // Get 3 random contents
+      const randomContents = [...sidebarContents]
+        .sort(() => 0.5 - Math.random())
+        .slice(0, 3);
+      
+      setPopupState({
+        isOpen: true,
+        x: event.clientX,
+        y: event.clientY,
+        contents: randomContents
+      });
+    }
+  }, [sidebarContents]);
 
   return (
     <div 
@@ -264,8 +313,27 @@ export default function Canvas({ nodes, links, onNodesChange, onLinksChange }: C
       className={styles.canvas}
       onDragOver={handleDragOver}
       onDrop={(e) => handleDrop(e, containerRef)}
+      onClick={handleCanvasClick}
     >
       <svg ref={svgRef} width="100%" height="100%" />
+      {popupState && (
+        <ContentPopup
+          x={popupState.x}
+          y={popupState.y}
+          contents={popupState.contents}
+          onSelect={(content) => {
+            const newNode: TextNode = {
+              id: crypto.randomUUID(),
+              type: 'text',
+              content: content.content,
+              x: popupState.x + 100,
+              y: popupState.y
+            };
+            onNodesChange([...nodes, newNode]);
+            setPopupState(null);
+          }}
+        />
+      )}
     </div>
   );
 } 

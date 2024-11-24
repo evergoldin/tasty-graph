@@ -8,6 +8,8 @@ export function useNodeDrag(
   styles: any
 ) {
   return useCallback(() => {
+    let dragStarted = false;
+    
     return d3.drag<SVGGElement, Node>()
       .subject(function(event) {
         const transform = d3.select(this).attr("transform");
@@ -19,9 +21,13 @@ export function useNodeDrag(
         };
       })
       .on('start', function(event) {
+        dragStarted = false;
         d3.select(this).classed(styles.dragging, true);
       })
       .on('drag', function(event, d) {
+        dragStarted = true;
+        event.sourceEvent.preventDefault(); // Prevent click when dragging
+        
         d3.select(this)
           .attr('transform', `translate(${event.x}, ${event.y})`);
         
@@ -39,6 +45,9 @@ export function useNodeDrag(
         onNodesChange(updatedNodes);
       })
       .on('end', function(event) {
+        if (dragStarted) {
+          event.sourceEvent.preventDefault(); // Prevent click when drag ends
+        }
         d3.select(this).classed(styles.dragging, false);
       });
   }, [nodes, onNodesChange, styles]);
