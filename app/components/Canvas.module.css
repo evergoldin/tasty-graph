@@ -11,11 +11,17 @@
 }
 
 .node {
-  fill: white;
-  stroke: #ccc;
+  fill: #ffffff;
+  stroke: #000000;
   stroke-width: 1px;
   cursor: move;
-  transition: stroke 0.2s ease;
+  transition: fill 0.2s ease;
+}
+
+.selected {
+  fill: #e3f2fd;
+  stroke: #1976d2;
+  stroke-width: 2px;
 }
 
 .dragging {

@@ -16,7 +16,14 @@ interface CanvasProps {
 export default function Canvas({ nodes, onNodesChange }: CanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const createDragBehavior = useNodeDrag(nodes, onNodesChange, styles);
+  const handleNodeClick = (node: ContentBlock) => {
+    const updatedNodes = nodes.map(n => ({
+      ...n,
+      selected: n.id === node.id ? !n.selected : false
+    }));
+    onNodesChange(updatedNodes);
+  };
+  const nodeDrag = useNodeDrag(nodes, onNodesChange, styles, handleNodeClick);
   const { handleDragOver, handleDrop } = useCanvasDrop(nodes, onNodesChange);
 
   useEffect(() => {
@@ -52,7 +59,7 @@ export default function Canvas({ nodes, onNodesChange }: CanvasProps) {
             .attr("height", CANVAS_CONSTANTS.NODE_HEIGHT)
             .attr("rx", CANVAS_CONSTANTS.BORDER_RADIUS)
             .attr("ry", CANVAS_CONSTANTS.BORDER_RADIUS)
-            .attr("class", styles.node);
+            .attr("class", d => `${styles.node} ${d.selected ? styles.selected : ''}`);
 
           // Add text to nodes
           contentGroup.append("text")
@@ -75,9 +82,9 @@ export default function Canvas({ nodes, onNodesChange }: CanvasProps) {
       );
 
     // Apply drag behavior
-    nodeGroups.call(createDragBehavior());
+    nodeGroups.call(nodeDrag());
 
-  }, [nodes, createDragBehavior]);
+  }, [nodes, nodeDrag]);
 
   return (
     <div 

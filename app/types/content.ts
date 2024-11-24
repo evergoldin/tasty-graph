@@ -5,4 +5,5 @@ export interface ContentBlock {
   timestamp: Date;
   x?: number;
   y?: number;
+  selected?: boolean;
 } 
