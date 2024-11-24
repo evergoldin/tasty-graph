@@ -54,19 +54,8 @@
 
 .contentBlock {
   padding: 16px;
-  border: 1px solid #ccc;
-  min-height: 96px;
+  border-radius: 8px;
   flex-shrink: 0;
-  background-color: var(--background-secondary);
+  background-color: var(--background-primary);
+  cursor: pointer;
 }
-
-.contentHeader {
-  margin-bottom: 4px;
-  border-bottom: 1px solid #ccc;
-}
-
-.contentText {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-} 
